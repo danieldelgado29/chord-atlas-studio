@@ -1,1 +1,35 @@
-const VERSION='chord-atlas-v18-2-shell-1';const AUDIO='chord-atlas-pwa-v16-audio';const SHELL=['./','./index.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./assets/audio/manifest.json','./assets/drums/36_1.wav','./assets/drums/36_2.wav','./assets/drums/36_3.wav','./assets/drums/38_1.wav','./assets/drums/38_2.wav','./assets/drums/38_3.wav','./assets/drums/42_1.wav','./assets/drums/42_2.wav','./assets/drums/42_3.wav','./assets/drums/46_1.wav','./assets/drums/46_2.wav','./assets/drums/46_3.wav','./assets/drums/45_1.wav','./assets/drums/45_2.wav','./assets/drums/45_3.wav','./assets/drums/49_1.wav','./assets/drums/49_2.wav','./assets/drums/49_3.wav','./assets/drums/51_1.wav','./assets/drums/51_2.wav','./assets/drums/51_3.wav','./assets/drums/pro/36_1.wav','./assets/drums/pro/36_2.wav','./assets/drums/pro/36_3.wav','./assets/drums/pro/38_1.wav','./assets/drums/pro/38_2.wav','./assets/drums/pro/38_3.wav','./assets/drums/pro/42_1.wav','./assets/drums/pro/42_2.wav','./assets/drums/pro/42_3.wav','./assets/drums/pro/46_1.wav','./assets/drums/pro/46_2.wav','./assets/drums/pro/46_3.wav','./assets/drums/pro/45_1.wav','./assets/drums/pro/45_2.wav','./assets/drums/pro/45_3.wav','./assets/drums/pro/49_1.wav','./assets/drums/pro/49_2.wav','./assets/drums/pro/49_3.wav','./assets/drums/pro/51_1.wav','./assets/drums/pro/51_2.wav','./assets/drums/pro/51_3.wav'];self.addEventListener('install',event=>{event.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()))});self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});self.addEventListener('fetch',event=>{if(event.request.method!=='GET')return;const url=new URL(event.request.url);if(url.origin!==self.location.origin)return;if(url.pathname.includes('/assets/audio/')||url.pathname.includes('/assets/drums/')){event.respondWith(caches.open(AUDIO).then(async cache=>{const saved=await cache.match(event.request);if(saved)return saved;const response=await fetch(event.request);if(response.ok)cache.put(event.request,response.clone());return response}));return}event.respondWith(fetch(event.request).then(response=>{if(response.ok&&url.pathname.endsWith('/index.html')){const copy=response.clone();caches.open(VERSION).then(cache=>cache.put(event.request,copy))}return response}).catch(()=>caches.match(event.request).then(r=>r||caches.match('./index.html'))))});
+const VERSION='chord-atlas-v18-2-recovery-20261112';
+const AUDIO='chord-atlas-pwa-v16-audio';
+const SHELL=['./index.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
+self.addEventListener('install',event=>{
+  event.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
+});
+self.addEventListener('activate',event=>{
+  event.waitUntil(Promise.all([
+    caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('chord-atlas-')&&k!==VERSION&&k!==AUDIO).map(k=>caches.delete(k)))),
+    self.clients.claim()
+  ]));
+});
+self.addEventListener('fetch',event=>{
+  if(event.request.method!=='GET')return;
+  const url=new URL(event.request.url);
+  if(url.origin!==self.location.origin)return;
+  if(url.pathname.includes('/assets/audio/')||url.pathname.includes('/assets/drums/')){
+    event.respondWith(caches.open(AUDIO).then(async cache=>{
+      const cached=await cache.match(event.request);
+      if(cached)return cached;
+      const response=await fetch(event.request);
+      if(response.ok)cache.put(event.request,response.clone());
+      return response;
+    }));
+    return;
+  }
+  if(event.request.mode==='navigate'||url.pathname.endsWith('/index.html')||url.pathname.endsWith('/')){
+    event.respondWith(fetch(event.request,{cache:'no-store'}).then(async response=>{
+      if(response.ok){const cache=await caches.open(VERSION);cache.put('./index.html',response.clone());}
+      return response;
+    }).catch(async()=> (await caches.match('./index.html'))||Response.error()));
+    return;
+  }
+  event.respondWith(fetch(event.request).catch(()=>caches.match(event.request)));
+});
