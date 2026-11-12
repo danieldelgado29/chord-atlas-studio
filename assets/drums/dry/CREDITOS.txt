@@ -1,0 +1,4 @@
+Salamander Drumkit — Alexander Holm. Public Domain desde 2022-03-04.
+https://rytmenpinne.wordpress.com/sounds-and-such/salamander-drumkit/
+Selección de muestras originales para Chord Atlas; sin modificaciones de audio.
+Las notas no cubiertas por Salamander siguen usando FreePats GM Percussion.
