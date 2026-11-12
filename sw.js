@@ -1,14 +1,11 @@
-const VERSION='chord-atlas-v18-2-recovery-20261112';
+const VERSION='chord-atlas-v18-3-gm-pro-shell';
 const AUDIO='chord-atlas-pwa-v16-audio';
-const SHELL=['./index.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
+const SHELL=['./index.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./assets/audio/manifest.json','./assets/drums/pro/manifest.json'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
 });
 self.addEventListener('activate',event=>{
-  event.waitUntil(Promise.all([
-    caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('chord-atlas-')&&k!==VERSION&&k!==AUDIO).map(k=>caches.delete(k)))),
-    self.clients.claim()
-  ]));
+  event.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('chord-atlas-')&&k!==VERSION&&k!==AUDIO).map(k=>caches.delete(k)))),self.clients.claim()]));
 });
 self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET')return;
@@ -16,20 +13,16 @@ self.addEventListener('fetch',event=>{
   if(url.origin!==self.location.origin)return;
   if(url.pathname.includes('/assets/audio/')||url.pathname.includes('/assets/drums/')){
     event.respondWith(caches.open(AUDIO).then(async cache=>{
-      const cached=await cache.match(event.request);
-      if(cached)return cached;
+      const cached=await cache.match(event.request);if(cached)return cached;
       const response=await fetch(event.request);
-      if(response.ok)cache.put(event.request,response.clone());
-      return response;
-    }));
-    return;
+      if(response.ok)await cache.put(event.request,response.clone());return response;
+    }));return;
   }
   if(event.request.mode==='navigate'||url.pathname.endsWith('/index.html')||url.pathname.endsWith('/')){
     event.respondWith(fetch(event.request,{cache:'no-store'}).then(async response=>{
-      if(response.ok){const cache=await caches.open(VERSION);cache.put('./index.html',response.clone());}
+      if(response.ok){const cache=await caches.open(VERSION);await cache.put('./index.html',response.clone());}
       return response;
-    }).catch(async()=> (await caches.match('./index.html'))||Response.error()));
-    return;
+    }).catch(async()=>(await caches.match('./index.html'))||Response.error()));return;
   }
   event.respondWith(fetch(event.request).catch(()=>caches.match(event.request)));
 });

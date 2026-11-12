@@ -7,10 +7,46 @@ algunas muestras individuales están sujetas a otras licencias compatibles.
 Conservar la documentación y licencias originales. Este archivo no sustituye el texto legal.
 
 Mapa de 21 muestras seleccionadas por capas de velocidad:
+35 Percusión GM: LV1.wav, MV1.wav, HV1.wav
 36 bombo: Kick04.wav, Kick04.wav, Kick04.wav
+37 Percusión GM: 01.wav, 03.wav, 03.wav
 38 caja: LV1.wav, HV1.wav, HV1.wav
+39 Percusión GM: 01_03.wav, 01_03.wav, 01_03.wav
+40 Percusión GM: Snare09.wav, Snare09.wav, Snare09.wav
+41 Percusión GM: 01.wav, 01.wav, 01.wav
 42 hi-hat cerrado: 01.wav, 01.wav, 01.wav
-46 hi-hat abierto: 01.wav, 01.wav, 01.wav
+43 Percusión GM: 01.wav, 01.wav, 01.wav
+44 Percusión GM: 01.wav, 01.wav, 01.wav
 45 tom: 01.wav, 01.wav, 01.wav
+46 hi-hat abierto: 01.wav, 01.wav, 01.wav
+47 Percusión GM: 01.wav, 01.wav, 01.wav
+48 Percusión GM: 01.wav, 01.wav, 01.wav
 49 crash: 01.wav, 01.wav, 01.wav
+50 Percusión GM: 01.wav, 01.wav, 01.wav
 51 ride: MV1.wav, MV1.wav, HV1.wav
+52 Percusión GM: 01.wav, 01.wav, 01.wav
+53 Percusión GM: 01.wav, 01.wav, 01.wav
+54 Percusión GM: 01_01.wav, 01_01.wav, 01_01.wav
+55 Percusión GM: 01.wav, 01.wav, 01.wav
+56 Percusión GM: 11.wav, 11.wav, 11.wav
+57 Percusión GM: 01.wav, 01.wav, 01.wav
+58 Percusión GM: 01.wav, 01.wav, 01.wav
+59 Percusión GM: MV1.wav, MV1.wav, HV1.wav
+60 Percusión GM: 1_01.wav, 1_01.wav, 1_01.wav
+61 Percusión GM: 2_13.wav, 2_10.wav, 2_10.wav
+62 Percusión GM: v1_02_01.wav, v1_02_01.wav, v1_02_01.wav
+63 Percusión GM: v2_01_01.wav, v2_01_01.wav, v2_01_01.wav
+64 Percusión GM: v2_01_01.wav, v2_01_01.wav, v2_01_01.wav
+67 Percusión GM: High01_01.wav, High01_01.wav, High01_01.wav
+68 Percusión GM: Low01_01.wav, Low01_01.wav, Low01_01.wav
+69 Percusión GM: 01_01.wav, 01_01.wav, 01_01.wav
+70 Percusión GM: 01_01.wav, 01_01.wav, 01_01.wav
+71 Percusión GM: Short.wav, Short.wav, Short.wav
+72 Percusión GM: Long.wav, Long.wav, Long.wav
+73 Percusión GM: Short.wav, Short.wav, Short.wav
+74 Percusión GM: Long.wav, Long.wav, Long.wav
+75 Percusión GM: 01.wav, 01.wav, 01.wav
+76 Percusión GM: 01.wav, 01.wav, 01.wav
+77 Percusión GM: 01.wav, 01.wav, 01.wav
+80 Percusión GM: 01_01.wav, 01_01.wav, 01_01.wav
+81 Percusión GM: 01_01.wav, 01_01.wav, 01_01.wav
