@@ -1140,7 +1140,7 @@ const DrumAudio={
   const begin=Math.max(when,audio.currentTime+.002);
   // Conserva el ataque y reproduce el WAV completo. La automatización atenúa
   // solamente el ambiente tardío: nunca se detiene prematuramente el audio.
-  if(this.dampPercent>0){
+  if(this.dampPercent>0&&this.kit==='gm'){
     const times=this.dampTimes(midi);
     if(times){const [hold,finish]=times;const level=gain.gain.value;
       const reduction=.70*this.dampPercent/100;
@@ -1181,11 +1181,11 @@ masterBoostEl.value=AudioBus.getBoost();
 const showGain=()=>{const db=Number(masterBoostEl.value);boostLabel.textContent=(db>=0?'+':'')+db+' dB';};showGain();
 masterBoostEl.addEventListener('input',()=>{AudioBus.setBoost(masterBoostEl.value);showGain()});
 const reverbEl=$('reverbAmount'),reverbLabel=$('reverbLabel'),fxInstrument=$('fxInstrument');
-function updateReverbControl(){reverbEl.value=AudioBus.getReverb(fxInstrument.value);reverbLabel.textContent=reverbEl.value+'%';$('drumDampControl').hidden=fxInstrument.value!=='drums';$('drumKitControl').hidden=fxInstrument.value!=='drums'}
+function updateReverbControl(){reverbEl.value=AudioBus.getReverb(fxInstrument.value);reverbLabel.textContent=reverbEl.value+'%';$('drumKitControl').hidden=fxInstrument.value!=='drums';$('drumDampControl').hidden=fxInstrument.value!=='drums'||DrumAudio.kit!=='gm'}
 fxInstrument.addEventListener('change',updateReverbControl);
 reverbEl.addEventListener('input',()=>{AudioBus.setReverb(fxInstrument.value,reverbEl.value);reverbLabel.textContent=reverbEl.value+'%'});
 const drumKitChoice=$('drumKitChoice');drumKitChoice.value=DrumAudio.kit;
-drumKitChoice.addEventListener('change',()=>{DrumAudio.setKit(drumKitChoice.value);toast('Kit: '+(DrumAudio.kit==='dry'?'Salamander acústico (FreePats para GM restante)':'FreePats GM'))});
+drumKitChoice.addEventListener('change',()=>{DrumAudio.setKit(drumKitChoice.value);updateReverbControl();toast('Kit: '+(DrumAudio.kit==='dry'?'Salamander acústico (FreePats para GM restante)':'FreePats GM'))});
 const drumDamp=$('drumDampAmount'),drumDampLabel=$('drumDampLabel');
 drumDamp.value=DrumAudio.dampPercent;drumDampLabel.textContent=DrumAudio.dampPercent+'%';
 drumDamp.addEventListener('input',()=>{DrumAudio.setDamp(drumDamp.value);drumDampLabel.textContent=DrumAudio.dampPercent+'%'});
