@@ -1049,7 +1049,7 @@ const V6UI=(()=>{
  function releaseKey(key){endVoice(key)}
  function open(type){finishHeldNotes();pane=['drums','melody','bass'].includes(type)?'roll':'pool';if(['drums','bass','melody'].includes(type)){rollTrack=type;rollNote=null;selectedNotes.clear();rollStep=0;rollOctave=type==='bass'?2:type==='drums'?3:4;savedRollScrollTop=null}preview=null;$('editorDock').classList.remove('hidden');document.querySelector('.main').classList.toggle('roll-focused',pane==='roll');render()}
  function close(){finishHeldNotes();typingOn=false;$('editorDock').classList.add('hidden');document.querySelector('.main').classList.remove('roll-focused')}
- function render(){if($('editorDock').classList.contains('hidden'))return;const isPool=pane==='pool';document.querySelector('.main').classList.toggle('roll-focused',!isPool);$('poolPane').hidden=!isPool;$('rollPane').hidden=isPool;$('drumPane').hidden=true;if(isPool)renderPool();else renderRoll()}
+ function render(){if($('editorDock').classList.contains('hidden'))return;const isPool=pane==='pool';document.querySelector('.main').classList.toggle('roll-focused',!isPool);$('poolPane').hidden=!isPool;$('rollPane').hidden=isPool;if(isPool)renderPool();else renderRoll()}
  function onKey(e){
   const key=e.key.toLowerCase();
   if(e.type==='keyup'){if(pressed.has(key))endVoice(key);return}
