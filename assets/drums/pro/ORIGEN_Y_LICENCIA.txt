@@ -1,0 +1,16 @@
+CHORD ATLAS — Biblioteca de batería acústica
+Fuente: FreePats GM Percussion Sound Set (2020-08-22)
+URL: https://freepats.zenvoid.org/SoundSets/general-midi.html
+Archivo original: https://freepats.zenvoid.org/SoundSets/GM-PercussionSet/FreePatsGM-Percussion-SFZ-20200822.tar.xz
+Licencia de origen: GNU GPL 3.0 o posterior con excepción especial para obras musicales;
+algunas muestras individuales están sujetas a otras licencias compatibles.
+Conservar la documentación y licencias originales. Este archivo no sustituye el texto legal.
+
+Mapa de 21 muestras seleccionadas por capas de velocidad:
+36 bombo: Kick04.wav, Kick04.wav, Kick04.wav
+38 caja: LV1.wav, HV1.wav, HV1.wav
+42 hi-hat cerrado: 01.wav, 01.wav, 01.wav
+46 hi-hat abierto: 01.wav, 01.wav, 01.wav
+45 tom: 01.wav, 01.wav, 01.wav
+49 crash: 01.wav, 01.wav, 01.wav
+51 ride: MV1.wav, MV1.wav, HV1.wav
