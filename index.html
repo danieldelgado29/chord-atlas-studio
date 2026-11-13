@@ -850,7 +850,9 @@ const V6UI=(()=>{
  }
  function melodicSuggestionsHtml(){
   const notes=state.bars[selectedBar]?.melody||[];
-  if(!notes.length)return '<div class="ca-melody-harmony"><strong>Armonía desde la melodía</strong><span class="small">Escribe notas en Melodía para ver posibles acordes aquí.</span></div>';
+  if(!notes.length){const barsWithNotes=state.bars.map((b,i)=>({i,count:(b.melody||[]).length})).filter(x=>x.count>0);
+    return '<div class="ca-melody-harmony"><strong>Armonía desde la melodía</strong>'+(barsWithNotes.length?'<span class="small">Este compás no tiene notas. Ver sugerencias de:</span><div class="ca-harmony-choices">'+barsWithNotes.map(x=>'<button type="button" data-melody-bar="'+x.i+'">Compás '+(x.i+1)+'</button>').join('')+'</div>':'<span class="small">Escribe notas en Melodía para ver posibles acordes aquí.</span>')+'</div>';
+  }
   const candidates=melodicCandidates();
   return '<div class="ca-melody-harmony"><div class="ca-harmony-heading"><strong>Posibles acordes · compás '+(selectedBar+1)+'</strong><span class="small">Sugerencias, no tonalidad detectada</span></div>'+
     (candidates.length?'<div class="ca-harmony-choices">'+candidates.map(c=>'<div class="ca-harmony-choice"><strong>'+esc(c.name)+'</strong><span class="small">'+c.fit+'% notas compatibles</span><button type="button" data-melody-listen="'+esc(c.name)+'">♫</button><button type="button" data-melody-use="'+esc(c.name)+'">Usar</button></div>').join('')+'</div>':'<span class="small">No hay coincidencias claras; prueba otro fragmento.</span>')+'</div>';
@@ -873,6 +875,7 @@ const V6UI=(()=>{
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function renderPool(){
   const el=$('poolPane');el.innerHTML=(selected()?melodicSuggestionsHtml():'')+poolHtml();
+  el.querySelectorAll('[data-melody-bar]').forEach(btn=>btn.onclick=()=>{selectedBar=Number(btn.dataset.melodyBar);selectedChord=state.bars[selectedBar].chords[0]?.id||null;render();});
   el.querySelectorAll('[data-melody-listen]').forEach(btn=>btn.onclick=()=>auditionChord(btn.dataset.melodyListen));
   el.querySelectorAll('[data-melody-use]').forEach(btn=>btn.onclick=()=>{
     const symbol=btn.dataset.melodyUse;if(!ChordEngine.analyze(symbol).ok)return;
