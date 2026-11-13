@@ -1,4 +1,4 @@
-const VERSION='chord-atlas-v18-4-salamander-20261112';
+const VERSION='chord-atlas-v18-5-melody-first-20261112';
 const AUDIO='chord-atlas-pwa-v16-audio';
 const SHELL=['./index.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./assets/audio/manifest.json','./assets/drums/pro/manifest.json'];
 self.addEventListener('install',event=>{
