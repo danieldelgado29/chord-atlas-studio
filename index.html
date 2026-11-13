@@ -299,19 +299,35 @@ header>div[style*="flex:1"]{min-width:0!important}
 
 .ca-melody-harmony{padding:9px 10px;border-bottom:1px solid #475565;display:flex;flex-direction:column;gap:8px}.ca-harmony-heading{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.ca-harmony-choices{display:flex;gap:6px;flex-wrap:wrap}.ca-harmony-choice{display:flex;align-items:center;gap:6px;padding:4px 6px;background:#283843;border:1px solid #445a68;border-radius:3px}.ca-harmony-choice button{padding:3px 7px}.ca-harmony-choice .small{font-size:10px;color:#a7bbca}
 
-/* V18.6 — editor de audio, sin alterar el Piano Roll */
-#micPane{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:12px}
+/* V18.7 — editor audio multipista tipo DAW */
+#micPane{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:8px;padding:7px}
 #micPane[hidden]{display:none!important}
-.micToolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
-.micToolbar select{min-width:165px;max-width:280px;flex:1}
-.micToolbar meter{width:84px;height:15px}
-.micStatus{color:#aec6d7;font-size:11px}
-.micClips{position:relative;height:125px;min-height:125px;border:1px solid #526a79;background:repeating-linear-gradient(90deg,#21303c,#21303c 42px,#293948 43px);overflow:hidden}
-.micMeasure{position:absolute;height:100%;border-left:1px solid #7890a955}
-.micRegion{position:absolute;top:32px;height:60px;border:1px solid #7dadb9;background:#386575;color:#e5f4fc;padding:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:6px}
-.micTakes{display:flex;flex-direction:column;gap:6px}
-.micTake{display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px solid #3c4d59}
-.micTake span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.micToolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;flex:0 0 auto}
+.micToolbar select{min-width:100px;max-width:200px;flex:1}
+.micToolbar meter{width:65px}
+.micStatus{font-size:10px;color:#a8c1d2;min-height:15px}
+.micDaw{display:flex;min-height:180px;flex:1;overflow:hidden;border:1px solid #415464}
+.micTrackList{width:195px;flex:0 0 195px;background:#25323d;border-right:1px solid #516b79;overflow:hidden;padding-top:30px}
+.micTrackLabel{height:86px;border-bottom:1px solid #506274;display:flex;gap:3px;align-items:center;padding:4px;flex-wrap:wrap}
+.micTrackLabel.armed{background:#324c60}
+.micTrackName{width:100%;height:25px;font-size:11px}
+.micTrackLabel button{padding:3px 6px;font-size:11px}
+.micArrangeScroll{flex:1;min-width:0;overflow:auto;background:#202b34}
+.micAudioRuler{height:30px;position:relative;background:#273844;border-bottom:1px solid #536876}
+.micRulerMark{position:absolute;height:30px;border-left:1px solid #8093a2;padding:6px;font-size:10px}
+.micRegions{min-height:86px}
+.micLane{height:86px;position:relative;border-bottom:1px solid #465867;background:repeating-linear-gradient(90deg,transparent,transparent 79px,#415260 80px)}
+.micRegion{position:absolute;top:9px;height:66px;min-width:10px;border:1px solid #7aa5b9;background:#345768;cursor:grab;overflow:hidden}
+.micRegion canvas{display:block;width:100%;height:100%}
+.micRegion span{position:absolute;top:2px;left:5px;font-size:10px;color:#e7f2fa;text-shadow:0 1px 2px #000}
+.micTrim{position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize}
+.micTrimL{left:0}.micTrimR{right:0}
+.micInspector{flex:0 0 auto;max-height:220px;overflow:auto;padding:7px;border-top:1px solid #526575;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.micInspector>strong{width:100%;font-size:11px}
+.micFxLine{display:flex;gap:5px;align-items:center;min-width:185px;font-size:10px}
+.micFxLine span{width:60px}.micFxLine input{flex:1;min-width:60px}.micFxLine output{min-width:40px;text-align:right}
+.micCompToggle{display:flex;align-items:center;gap:4px}
+.micInspectorHelp{font-size:10px;color:#9eb2c2}
 </style><style>
 /* CHORD ATLAS V18 — launchpad de proyectos; no cambia geometría DAW V17.3 */
 #ca-home{position:fixed;inset:0;z-index:5000;background:#141c25;color:#d9e7f0;display:flex;align-items:center;justify-content:center;overflow:auto;padding:28px;font-family:inherit}
@@ -1265,77 +1281,100 @@ $('grid').addEventListener('change',()=>{const value=Number($('grid').value);if(
 
 /* MIC TRACK V18.6 — Captura local; el audio no se sube a GitHub. */
 const MicTrack=(()=>{
- const DB='chord-atlas-audio-v1',STORE='takes';
- let dbPromise=null,project=null,takes=[],stream=null,recorder=null,recording=false,chunks=[],recordStart=0,recordAt=0;
- let devices=[],selectedInput='',sources=new Set(),decoded=new Map(),notice='Selecciona tu interfaz y graba una toma.',levelTimer=null,levelCtx=null,levelAnalyser=null,levelSrc=null,monitorCtx=null;
- function db(){if(dbPromise)return dbPromise;dbPromise=new Promise((resolve,reject)=>{const req=indexedDB.open(DB,1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains(STORE)){const store=req.result.createObjectStore(STORE,{keyPath:'key'});store.createIndex('byProject','project')}};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});return dbPromise}
- async function read(){if(!project){takes=[];return}try{const d=await db();const tx=d.transaction(STORE,'readonly');const req=tx.objectStore(STORE).index('byProject').getAll(project);const found=await new Promise((res,rej)=>{req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error)});takes=found.sort((a,b)=>a.startTick-b.startTick);decoded.clear()}catch(e){notice='No se puede abrir el almacenamiento de audio: '+e.message}render()}
- async function put(take){const d=await db();await new Promise((res,rej)=>{const tx=d.transaction(STORE,'readwrite');tx.objectStore(STORE).put(take);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
- async function remove(key){const d=await db();await new Promise((res,rej)=>{const tx=d.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(key);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
- function setProject(id){if(recording||recorder)stopRecord();project=id;takes=[];decoded.clear();notice='Audio guardado localmente en este navegador.';read()}
- function status(t){notice=t;const x=$('micStatus');if(x)x.textContent=t}
- function stopTracks(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}if(levelTimer){clearInterval(levelTimer);levelTimer=null}try{levelSrc?.disconnect()}catch(_){}levelSrc=null;levelAnalyser=null}
- async function listDevices(){try{devices=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput');renderDevices()}catch(e){status('No se pudo consultar entradas: '+e.message)}}
- function renderDevices(){const select=$('micDevice');if(!select)return;select.innerHTML='<option value="">Entrada predeterminada</option>';devices.forEach((d,i)=>{const opt=document.createElement('option');opt.value=d.deviceId;opt.textContent=d.label||'Micrófono '+(i+1);select.appendChild(opt)});select.value=devices.some(d=>d.deviceId===selectedInput)?selectedInput:''}
- async function capture(){
-  if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined')throw Error('Tu navegador no permite grabación de micrófono. Usa Firefox, Chrome o Edge por HTTPS.');
-  const constraints={audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1,...(selectedInput?{deviceId:{ideal:selectedInput}}:{})},video:false};
-  stream=await navigator.mediaDevices.getUserMedia(constraints);await listDevices();
-  const track=stream.getAudioTracks()[0];status('Entrada lista: '+(track.label||'Micrófono'));return stream
+ const DB='chord-atlas-audio-v1',STORE='takes',EQ_FREQ=[60,120,250,500,1000,2000,4000,8000];
+ let dbPromise=null,project=null,tracks=[],armed='audio1',takes=[],stream=null,recorder=null,chunks=[],started=0,devices=[],inputId='',notice='Selecciona la M-Track Solo o una entrada de audio.';
+ let meterTimer=null,meterContext=null,meterSource=null,sources=new Set(),graphs=new Set(),decoded=new Map(),waveCache=new Map(),busy=false,sessionToken=0;
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'' :'&#39;'}[c]));
+ function newTrack(name,id='audio-'+Date.now().toString(36)){return{id,name,volume:85,pan:0,mute:false,solo:false,eq:Array(8).fill(0),compressor:false,threshold:-24,ratio:3,reverb:0}}
+ const KEY=()=>('ca_v18_audio_tracks_'+project);
+ const selected=()=>tracks.find(x=>x.id===armed)||tracks[0];
+ function persist(){if(project)localStorage.setItem(KEY(),JSON.stringify({tracks,armed}))}
+ function restoreMeta(){try{const d=JSON.parse(localStorage.getItem(KEY())||'null');tracks=Array.isArray(d?.tracks)&&d.tracks.length?d.tracks.map(t=>({...newTrack(t.name,t.id),...t,eq:Array.isArray(t.eq)&&t.eq.length===8?t.eq:Array(8).fill(0)})):[newTrack('Voz principal','audio1')];armed=tracks.some(t=>t.id===d?.armed)?d.armed:tracks[0].id}catch(_){tracks=[newTrack('Voz principal','audio1')];armed='audio1'}}
+ function database(){if(dbPromise)return dbPromise;dbPromise=new Promise((resolve,reject)=>{const q=indexedDB.open(DB,1);q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains(STORE)){const x=q.result.createObjectStore(STORE,{keyPath:'key'});x.createIndex('byProject','project')}};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});return dbPromise}
+ async function query(){if(!project)return [];const db=await database();return new Promise((res,rej)=>{const q=db.transaction(STORE,'readonly').objectStore(STORE).index('byProject').getAll(project);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
+ async function put(t){const d=await database();return new Promise((res,rej)=>{const q=d.transaction(STORE,'readwrite');q.objectStore(STORE).put(t);q.oncomplete=res;q.onerror=()=>rej(q.error)})}
+ async function remove(key){const d=await database();return new Promise((res,rej)=>{const q=d.transaction(STORE,'readwrite');q.objectStore(STORE).delete(key);q.oncomplete=res;q.onerror=()=>rej(q.error)})}
+ function message(text){notice=text;if($('micStatus'))$('micStatus').textContent=text}
+ async function setProject(id){stopAudio();if(recorder&&recorder.state==='recording')recorder.stop();project=id;takes=[];decoded.clear();waveCache.clear();restoreMeta();const token=++sessionToken;try{const records=await query();if(token!==sessionToken)return;takes=records.map(t=>({...t,trackId:t.trackId||'audio1',offsetSec:t.offsetSec||0,lengthSec:t.lengthSec||t.seconds||1}));message('Grabaciones en este equipo. Usa Guardar proyecto en computadora para una copia portable.')}catch(e){message('Error al recuperar las tomas: '+e.message)}render()}
+ function addTrack(){const track=newTrack('Audio '+(tracks.length+1));tracks.push(track);armed=track.id;persist();render()}
+ function removeTrack(id){if(tracks.length<=1)return;if(takes.some(x=>x.trackId===id)){message('Esta pista tiene grabaciones; elimina las regiones antes de quitarla.');return}tracks=tracks.filter(t=>t.id!==id);if(armed===id)armed=tracks[0].id;persist();render()}
+ function levelStop(){if(meterTimer){clearInterval(meterTimer);meterTimer=null}try{meterSource?.disconnect()}catch(_){}meterSource=null}
+ function endStream(){levelStop();stream?.getTracks().forEach(t=>t.stop());stream=null}
+ async function devicesList(){try{devices=(await navigator.mediaDevices.enumerateDevices()).filter(t=>t.kind==='audioinput');const select=$('micDevice');if(select){select.innerHTML='<option value="">Entrada predeterminada</option>';devices.forEach((d,i)=>{const o=document.createElement('option');o.value=d.deviceId;o.textContent=d.label||'Entrada '+(i+1);select.appendChild(o)});select.value=devices.some(d=>d.deviceId===inputId)?inputId:''}}catch(e){message('Entradas: '+e.message)}}
+ async function capture(){if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)throw Error('Se requiere navegador compatible y HTTPS.');
+  stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1,...(inputId?{deviceId:{ideal:inputId}}:{})}});
+  await devicesList();message('Entrada activa: '+(stream.getAudioTracks()[0]?.label||'Micrófono'));return stream
  }
- function meter(){
-  try{levelCtx=levelCtx||new(window.AudioContext||window.webkitAudioContext)();levelAnalyser=levelCtx.createAnalyser();levelAnalyser.fftSize=512;levelSrc=levelCtx.createMediaStreamSource(stream);levelSrc.connect(levelAnalyser);const arr=new Uint8Array(levelAnalyser.fftSize);levelTimer=setInterval(()=>{if(!levelAnalyser)return;levelAnalyser.getByteTimeDomainData(arr);let rms=0;for(const v of arr)rms+=Math.pow((v-128)/128,2);const meterEl=$('micLevel');if(meterEl)meterEl.value=Math.min(100,Math.round(Math.sqrt(rms/arr.length)*350));},70)}catch(_){}
- }
- async function record(){
-  if(recording){stopRecord();return}
-  if(!project){status('Primero crea o abre un proyecto.');return}
-  try{
-   if(running)TransportEngine.stop(false);
-   await capture();const mime=['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4'].find(t=>MediaRecorder.isTypeSupported(t));
-   recorder=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);
-   const current=recorder,owner=project,startedTick=Math.max(0,TransportEngine.cursorTick??TransportEngine.selectedTick());
-   chunks=[];recordStart=startedTick;
-   current.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data)};
-   current.onerror=e=>status('Error de grabación: '+(e.error?.message||'desconocido'));
-   current.onstop=async()=>{const blob=new Blob(chunks,{type:current.mimeType||chunks[0]?.type||'audio/webm'});chunks=[];stopTracks();recorder=null;recording=false;
-    if(blob.size<100){status('No se registró audio.');render();return}
-    try{const take={key:owner+':'+Date.now()+'-'+Math.random().toString(36).slice(2,7),project:owner,startTick:startedTick,seconds:Math.max(.01,(Date.now()-recordAt)/1000),blob,name:'Micrófono '+new Date().toLocaleTimeString(),created:Date.now()};await put(take);if(owner===project){takes.push(take);takes.sort((a,b)=>a.startTick-b.startTick)}status('Toma guardada localmente ('+Math.round(blob.size/1024)+' KB).');render()}catch(e){status('Error al guardar: '+e.message);render()}};
-   await TransportEngine.start(startedTick);
-   if(!running){stopTracks();recorder=null;status('No pudo arrancar el transporte.');return}
-   recording=true;recordAt=Date.now();recorder.start(250);meter();status('● GRABANDO · pulsa STOP para guardar.');render();
-  }catch(e){stopTracks();recorder=null;recording=false;status('Micrófono: '+e.message);render()}
- }
- function stopRecord(){if(recorder&&recorder.state!=='inactive'){try{recorder.stop()}catch(_){stopTracks()}}else stopTracks();recording=false;render()}
- function onTransportStop(){stopRecord();for(const source of sources){try{source.stop()}catch(_){}}sources.clear()}
- async function schedule(session){if(!audio||!takes.length)return;
-  // Audio sincronizado al transporte por compás y subdivisión. Una toma por pista,
-  // pero se admiten varias regiones; se reproducen en su posición de grabación.
-  const owner=project,ctx=audio,from=session.fromTick,to=session.totalTicks;
-  for(const take of takes){if(owner!==project||!running)break;
+ function levelStart(){try{meterContext=meterContext||new(window.AudioContext||window.webkitAudioContext)();const analyser=meterContext.createAnalyser();analyser.fftSize=512;meterSource=meterContext.createMediaStreamSource(stream);meterSource.connect(analyser);const arr=new Uint8Array(512);meterTimer=setInterval(()=>{analyser.getByteTimeDomainData(arr);let sum=0;for(const v of arr)sum+=((v-128)/128)**2;const el=$('micLevel');if(el)el.value=Math.min(100,Math.round(350*Math.sqrt(sum/arr.length)))},70)}catch(e){console.warn('Medidor',e)}}
+ async function record(){if(recorder){TransportEngine.stop(false);return}if(!project){message('Abre un proyecto primero.');return}try{
+  if(running)TransportEngine.stop(false);busy=true;render();await capture();
+  const type=['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4'].find(m=>MediaRecorder.isTypeSupported(m));
+  const rec=new MediaRecorder(stream,type?{mimeType:type}:undefined);recorder=rec;chunks=[];
+  const owner=project,trackId=armed,planned=Math.max(0,TransportEngine.cursorTick??TransportEngine.selectedTick());
+  rec.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data)};
+  rec.onerror=e=>message('Grabación: '+(e.error?.message||'Error'));
+  rec.onstop=async()=>{const b=new Blob(chunks,{type:rec.mimeType||chunks[0]?.type||'audio/webm'});chunks=[];endStream();recorder=null;busy=false;
+   if(b.size<100){message('La grabación quedó vacía.');render();return}
+   const lengthSec=Math.max(.01,(Date.now()-started)/1000),item={key:owner+':'+Date.now()+'-'+Math.random().toString(36).slice(2,8),project:owner,trackId,startTick:Math.round(recordTick),offsetSec:0,lengthSec,seconds:lengthSec,blob:b,name:'Toma '+new Date().toLocaleTimeString(),created:Date.now()};
+   try{await put(item);if(owner===project)takes.push(item);message('Toma guardada en '+(tracks.find(t=>t.id===trackId)?.name||'Audio'));render()}catch(e){message('No se pudo guardar la voz: '+e.message)}};
+  await TransportEngine.start(planned);
+  if(!running){recorder=null;endStream();busy=false;render();return}
+  recordTick=Math.max(0,TransportEngine.currentTick());
+  started=Date.now();rec.start(250);levelStart();busy=false;message('● Grabando '+selected().name+' · STOP para terminar.');render()
+ }catch(e){endStream();recorder=null;busy=false;message('No fue posible grabar: '+e.message);render()}}
+ let recordTick=0;
+ function onTransportStop(){if(recorder&&recorder.state==='recording'){try{recorder.stop()}catch(e){console.warn(e)}}endStream();stopAudio()}
+ function stopAudio(){for(const src of sources){try{src.stop()}catch(_){}}sources.clear();for(const graph of graphs)try{graph.disconnect()}catch(_){}graphs.clear()}
+ function updateFxGraph(graph,track){for(let i=0;i<8;i++)graph.eq[i].gain.setTargetAtTime(+track.eq[i]||0,audio.currentTime,.02);graph.comp.threshold.setTargetAtTime(track.compressor?(+track.threshold||-24):0,audio.currentTime,.02);graph.comp.ratio.setTargetAtTime(track.compressor?(+track.ratio||3):1,audio.currentTime,.02);graph.pan.pan.setTargetAtTime((+track.pan||0)/100,audio.currentTime,.02);graph.vol.gain.setTargetAtTime(track.mute||tracks.some(t=>t.solo)&&!track.solo?0:(+track.volume||0)/100,audio.currentTime,.02);graph.wet.gain.setTargetAtTime((+track.reverb||0)/100*.4,audio.currentTime,.02)}
+ function makeGraph(track){const src=audio.createGain(),eq=EQ_FREQ.map((freq,i)=>{const f=audio.createBiquadFilter();f.type=i===0?'lowshelf':i===7?'highshelf':'peaking';f.frequency.value=freq;f.Q.value=1;return f});const comp=audio.createDynamicsCompressor(),pan=audio.createStereoPanner(),vol=audio.createGain(),wet=audio.createGain();let node=src;for(const f of eq){node.connect(f);node=f}node.connect(comp).connect(pan).connect(vol).connect(AudioBus.input('mic'));const reverb=audio.createConvolver(),len=Math.round(audio.sampleRate*.85),ir=audio.createBuffer(2,len,audio.sampleRate);for(let c=0;c<2;c++){let seed=233+c*197;const data=ir.getChannelData(c);for(let i=0;i<len;i++){seed=(seed*1664525+1013904223)>>>0;data[i]=((seed/2147483648)-1)*Math.pow(1-i/len,3)*.25}}reverb.buffer=ir;vol.connect(reverb).connect(wet).connect(AudioBus.input('mic'));const graph={src,eq,comp,pan,vol,wet,disconnect(){try{src.disconnect();eq.forEach(f=>f.disconnect());comp.disconnect();pan.disconnect();vol.disconnect();wet.disconnect();reverb.disconnect()}catch(_){}}};updateFxGraph(graph,track);graphs.add(graph);return graph}
+ async function schedule(session){if(!audio||!takes.length)return;const token=sessionToken,owner=project,ctx=audio,from=session.fromTick,secondsPerTick=session.secondsPerTick;
+  for(const take of takes){if(!running||owner!==project||token!==sessionToken||TransportEngine.session!==session)break;
    try{let buffer=decoded.get(take.key);if(!buffer){buffer=await ctx.decodeAudioData(await take.blob.arrayBuffer());decoded.set(take.key,buffer)}
     if(!running||owner!==project||TransportEngine.session!==session)break;
-    const clipTicks=buffer.duration/session.secondsPerTick,end=take.startTick+clipTicks;
-    if(end<=from||take.startTick>=to)continue;
-    const offset=Math.max(0,(from-take.startTick)*session.secondsPerTick);
-    const startTime=session.startTime+Math.max(0,take.startTick-from)*session.secondsPerTick;
-    const src=ctx.createBufferSource(),gain=ctx.createGain();src.buffer=buffer;gain.gain.value=.75;
-    src.connect(gain).connect(AudioBus.input('mic'));sources.add(src);src.onended=()=>sources.delete(src);
-    src.start(Math.max(ctx.currentTime+.005,startTime),offset);
-   }catch(e){console.warn('Audio de micrófono',e)}
+    const track=tracks.find(t=>t.id===take.trackId)||tracks[0];if(!track)continue;
+    const duration=Math.min(take.lengthSec??buffer.duration,buffer.duration-(take.offsetSec||0));const end=take.startTick+duration/secondsPerTick;if(end<=from||take.startTick>=session.totalTicks)continue;
+    const desired=session.startTime+Math.max(0,take.startTick-from)*secondsPerTick,real=Math.max(desired,ctx.currentTime+.01),extra=Math.max(0,real-desired),offset=(take.offsetSec||0)+Math.max(0,from-take.startTick)*secondsPerTick+extra;
+    const available=(take.offsetSec||0)+duration-offset;if(available<=.02)continue;
+    const src=ctx.createBufferSource(),graph=makeGraph(track);src.buffer=buffer;src.connect(graph.src);sources.add(src);src.onended=()=>{sources.delete(src);graphs.delete(graph);graph.disconnect()};src.start(real,offset,available);
+   }catch(e){console.warn('Región de audio no reproducida',e)}
   }
  }
- function drawTimeline(){
-  const x=$('micClips');if(!x)return;x.replaceChildren();const layout=TimelineEngine.build(state.bars),max=layout[layout.length-1]?.end||1;
-  for(let i=0;i<state.bars.length;i++){const c=document.createElement('div');c.className='micMeasure';c.style.left=(100*layout[i].start/max)+'%';x.appendChild(c)}
-  takes.forEach(t=>{const el=document.createElement('div');el.className='micRegion';el.style.left=(100*Math.max(0,t.startTick)/max)+'%';el.style.width=(100*Math.max(0,t.seconds*state.bpm/60*TPQ)/max)+'%';el.title=t.name;el.textContent=t.name;x.appendChild(el)})
+ function changedTrack(id,key,value){const t=tracks.find(t=>t.id===id);if(!t)return;t[key]=value;persist();for(const g of graphs)if(g.trackId===id)updateFxGraph(g,t)}
+ function tickWidth(){return Math.max(1,parseFloat(getComputedStyle(document.querySelector('.main')).getPropertyValue('--bar-width'))||320)}
+ async function waveform(canvas,take){try{let buffer=decoded.get(take.key);if(!buffer){buffer=await (audio||new(window.AudioContext||window.webkitAudioContext)()).decodeAudioData(await take.blob.arrayBuffer());decoded.set(take.key,buffer)}if(!canvas.isConnected)return;const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height,channel=buffer.getChannelData(0),offset=Math.round((take.offsetSec||0)*buffer.sampleRate),n=Math.round((take.lengthSec||take.seconds||1)*buffer.sampleRate);ctx.clearRect(0,0,w,h);ctx.strokeStyle='#a9d7e9';ctx.beginPath();for(let x=0;x<w;x++){const a=Math.min(channel.length,offset+Math.floor(x*n/w)),b=Math.min(channel.length,offset+Math.floor((x+1)*n/w)),stride=Math.max(1,Math.floor((b-a)/12));let lo=1,hi=-1;for(let j=a;j<b;j+=stride){lo=Math.min(lo,channel[j]);hi=Math.max(hi,channel[j])}if(hi<lo){lo=0;hi=0}ctx.moveTo(x,(1-hi)*h/2);ctx.lineTo(x,(1-lo)*h/2)}ctx.stroke()}catch(e){console.warn('Waveform',e)}}
+ function regionWidth(take){return Math.max(18,(take.lengthSec||take.seconds||1)*state.bpm/60*TPQ/Math.max(1,dur(state.bars[0]))*tickWidth())}
+ function render(){const el=$('micPane');if(!el||el.hidden)return;const layout=TimelineEngine.build(state.bars),measureWidths=state.bars.map(()=>tickWidth()),full=Math.max(800,state.bars.length*tickWidth());const selectedTrack=selected();el.innerHTML='<div class="micToolbar"><strong>AUDIO</strong><button id="micAddTrack">＋ Audio</button><select id="micDevice"></select><button id="micRefresh">Entradas</button><button id="micRec" class="'+(recorder?'active':'')+'">'+(recorder?'■ STOP':'● REC')+'</button><meter id="micLevel" min="0" max="100" value="0"></meter><button id="micSave">Guardar proyecto en computadora</button><button id="micOpen">Abrir archivo</button><input id="micOpenFile" type="file" accept=".chordatlas,application/json" hidden></div><div id="micStatus" class="micStatus"></div><div class="micDaw"><div class="micTrackList" id="micTrackList"></div><div class="micArrangeScroll" id="micArrangeScroll"><div class="micAudioRuler" id="micAudioRuler" style="width:'+full+'px"></div><div id="micRegions" class="micRegions" style="width:'+full+'px"></div></div></div><div class="micInspector" id="micInspector"></div>';
+  $('micAddTrack').onclick=addTrack;$('micRec').onclick=()=>record();$('micSave').onclick=()=>savePortable();$('micOpen').onclick=()=>$('micOpenFile').click();$('micOpenFile').onchange=e=>{if(e.target.files?.[0])openPortable(e.target.files[0]);e.target.value=''};$('micDevice').onchange=e=>{inputId=e.target.value};$('micRefresh').onclick=async()=>{try{if(!stream){await capture();endStream()}await devicesList()}catch(e){message(e.message)}};devicesList();message(notice);
+  const ruler=$('micAudioRuler'),rows=$('micRegions'),labels=$('micTrackList');state.bars.forEach((bar,i)=>{const mark=document.createElement('div');mark.className='micRulerMark';mark.style.left=(i*tickWidth())+'px';mark.textContent=(i+1)+' · '+bar.num+'/'+bar.den;ruler.appendChild(mark)});
+  for(const track of tracks){const id=track.id,lab=document.createElement('div');lab.className='micTrackLabel'+(armed===id?' armed':'');lab.innerHTML='<input class="micTrackName" aria-label="Nombre de pista" value="'+esc(track.name)+'"><button data-action="arm" title="Seleccionar pista">R</button><button data-action="mute" class="'+(track.mute?'active':'')+'">M</button><button data-action="solo" class="'+(track.solo?'active':'')+'">S</button><button data-action="remove" title="Quitar pista">×</button>';lab.querySelector('input').onchange=e=>{changedTrack(id,'name',e.target.value);render()};lab.querySelectorAll('button').forEach(b=>b.onclick=()=>{const a=b.dataset.action;if(a==='arm'){armed=id;persist();render()}else if(a==='mute'||a==='solo'){changedTrack(id,a,!track[a]);render()}else if(a==='remove')removeTrack(id)});labels.appendChild(lab);
+    const row=document.createElement('div');row.className='micLane';rows.appendChild(row);for(const t of takes.filter(t=>t.trackId===id)){const reg=document.createElement('div');reg.className='micRegion';reg.style.left=(t.startTick/TPQ*state.bpm/60*0+(() => {let tick=t.startTick,x=0;for(const b of state.bars){const d=dur(b);if(tick<d){x+=tick/d*tickWidth();break}x+=tickWidth();tick-=d}return x})())+'px';reg.style.width=regionWidth(t)+'px';reg.title=t.name+' · Option + arrastrar duplica';reg.dataset.key=t.key;reg.innerHTML='<canvas width="400" height="52"></canvas><span>'+esc(t.name)+'</span><i class="micTrim micTrimL"></i><i class="micTrim micTrimR"></i>';row.appendChild(reg);waveform(reg.querySelector('canvas'),t);bindRegion(reg,t,track)}
+  }
+  const scroll=$('micArrangeScroll');scroll.scrollLeft=$('bars').scrollLeft;scroll.addEventListener('scroll',()=>{if($('bars').scrollLeft!==scroll.scrollLeft)RulerEngine.scrollToPixel(scroll.scrollLeft)},{passive:true});
+  if(selectedTrack)drawInspector(selectedTrack)
  }
- function render(){const el=$('micPane');if(!el||el.hidden)return;
-  el.innerHTML='<div class="micToolbar"><strong>MICRÓFONO · AUDIO</strong><select id="micDevice" aria-label="Entrada de micrófono"></select><button type="button" id="micRefresh">Entradas</button><button type="button" id="micRec" class="'+(recording?'active':'')+'">'+(recording?'■ Detener toma':'● Grabar')+'</button><meter id="micLevel" min="0" max="100" value="0"></meter></div><div id="micStatus" class="micStatus"></div><div id="micClips" class="micClips"></div><div id="micTakes" class="micTakes"></div>';
-  $('micRec').onclick=()=>recording?TransportEngine.stop(false):record();$('micDevice').onchange=e=>{selectedInput=e.target.value};$('micRefresh').onclick=async()=>{try{if(!stream){await capture();stopTracks()}await listDevices()}catch(e){status(e.message)}};
-  renderDevices();status(notice);drawTimeline();const list=$('micTakes');for(const t of takes){const row=document.createElement('div');row.className='micTake';const label=document.createElement('span');label.textContent=t.name+' · '+t.seconds.toFixed(1)+' s';const download=document.createElement('button');download.textContent='Exportar audio';download.onclick=()=>{const url=URL.createObjectURL(t.blob),a=document.createElement('a');a.href=url;a.download='ChordAtlas_'+t.name.replace(/[^a-z0-9_-]/gi,'_')+(t.blob.type.includes('ogg')?'.ogg':t.blob.type.includes('mp4')?'.m4a':'.webm');a.click();setTimeout(()=>URL.revokeObjectURL(url),15000)};const del=document.createElement('button');del.textContent='Eliminar';del.onclick=async()=>{if(!confirm('¿Eliminar esta toma de micrófono?'))return;await remove(t.key);takes=takes.filter(x=>x.key!==t.key);decoded.delete(t.key);render()};row.append(label,download,del);list.appendChild(row)}}
- return{setProject,render,record,onTransportStop,schedule};
+ function drawInspector(track){const el=$('micInspector');el.replaceChildren();const title=document.createElement('strong');title.textContent='INSPECTOR · '+track.name;el.appendChild(title);
+  const addRange=(label,key,min,max,step=1,suffix='')=>{const wrap=document.createElement('label');wrap.className='micFxLine';const name=document.createElement('span');name.textContent=label;const slider=document.createElement('input');slider.type='range';slider.min=min;slider.max=max;slider.step=step;slider.value=track[key];const val=document.createElement('output');val.textContent=track[key]+suffix;slider.oninput=()=>{changedTrack(track.id,key,Number(slider.value));val.textContent=slider.value+suffix};wrap.append(name,slider,val);el.appendChild(wrap)};
+  addRange('Volumen','volume',0,150,1,'%');addRange('Pan','pan',-100,100);
+  const h=document.createElement('strong');h.textContent='EQ · 8 bandas';el.appendChild(h);EQ_FREQ.forEach((freq,i)=>{const wrap=document.createElement('label');wrap.className='micFxLine';const name=document.createElement('span');name.textContent=freq>=1000?freq/1000+'k':freq+' Hz';const range=document.createElement('input');range.type='range';range.min=-18;range.max=18;range.step=.5;range.value=track.eq[i];const out=document.createElement('output');out.textContent=track.eq[i]+' dB';range.oninput=()=>{track.eq[i]=+range.value;persist();for(const g of graphs)if(g.trackId===track.id)updateFxGraph(g,track);out.textContent=range.value+' dB'};wrap.append(name,range,out);el.appendChild(wrap)});
+  const comp=document.createElement('label');comp.className='micCompToggle';const ck=document.createElement('input');ck.type='checkbox';ck.checked=track.compressor;ck.onchange=()=>{changedTrack(track.id,'compressor',ck.checked)};comp.append(ck,document.createTextNode(' Compresor'));el.appendChild(comp);addRange('Umbral','threshold',-60,0,1,' dB');addRange('Ratio','ratio',1,12,.5,':1');addRange('Reverb','reverb',0,100,1,'%');
+  const del=document.createElement('div');del.className='micInspectorHelp';del.textContent='Selecciona una pista para sus efectos. Option + arrastrar duplica regiones. Doble clic divide una región.';el.appendChild(del)
+ }
+ function tickToPx(tick){let rest=tick,x=0;for(const bar of state.bars){const d=dur(bar);if(rest<d){x+=rest/d*tickWidth();break}rest-=d;x+=tickWidth()}return x}
+ function pxToTick(px){let rem=Math.max(0,px),sum=0;for(const bar of state.bars){const w=tickWidth(),d=dur(bar);if(rem<w)return Math.round(sum+rem/w*d);rem-=w;sum+=d}return sum}
+ function bindRegion(el,take,track){let down=null;el.addEventListener('pointerdown',e=>{if(e.button!==0)return;down={x:e.clientX,alt:e.altKey,side:e.target.classList.contains('micTrimL')?'left':e.target.classList.contains('micTrimR')?'right':'move',start:take.startTick,offset:take.offsetSec||0,length:take.lengthSec||take.seconds||1};el.setPointerCapture(e.pointerId)});el.addEventListener('pointerup',async e=>{if(!down)return;const d=down;down=null;const diff=e.clientX-d.x;if(Math.abs(diff)<4)return;const tickDiff=Math.round(pxToTick(Math.abs(diff))*(diff<0?-1:1));const secondsPerTick=60/state.bpm/TPQ;
+   if(d.side==='move'){if(d.alt){const cp={...take,key:project+':'+Date.now()+'-'+Math.random().toString(36).slice(2,7),startTick:Math.max(0,d.start+tickDiff),name:take.name+' copia'};await put(cp);takes.push(cp)}else{take.startTick=Math.max(0,d.start+tickDiff);await put(take)}}
+   else if(d.side==='left'){const ds=Math.max(-d.offset,Math.min(d.length-.08,tickDiff*secondsPerTick));take.offsetSec=d.offset+ds;take.lengthSec=d.length-ds;take.startTick=Math.max(0,d.start+tickDiff);await put(take)}
+   else{take.lengthSec=Math.max(.08,d.length+tickDiff*secondsPerTick);await put(take)}
+   decoded.delete(take.key);render()
+  });el.addEventListener('dblclick',async e=>{e.stopPropagation();const bounds=el.getBoundingClientRect(),part=(e.clientX-bounds.left)/Math.max(1,bounds.width),d=take.lengthSec||take.seconds||1,point=Math.max(.08,Math.min(d-.08,d*part));if(d<=.17)return;const extra={...take,key:project+':'+Date.now()+'-'+Math.random().toString(36).slice(2,7),offsetSec:(take.offsetSec||0)+point,startTick:take.startTick+Math.round(point*state.bpm/60*TPQ),lengthSec:d-point,name:take.name+' B'};take.lengthSec=point;await put(take);await put(extra);takes.push(extra);render()})
+ }
+ async function savePortable(){if(!project||busy)return;try{busy=true;message('Preparando archivo con audio…');const all=await query();const data=[];for(const take of all){const ab=await take.blob.arrayBuffer(),bytes=new Uint8Array(ab);let str='';for(let p=0;p<bytes.length;p+=32768)str+=String.fromCharCode(...bytes.subarray(p,p+32768));const {blob,...meta}=take;data.push({...meta,mime:blob.type,data:btoa(str)})}
+  const doc={format:'chordatlas-project',version:1,title:state.projectTitle||'Proyecto',song:state,tracks,armed,audio:data,exported:new Date().toISOString()};const blob=new Blob([JSON.stringify(doc)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(state.projectTitle||'Chord Atlas').replace(/[^a-z0-9 _-]/gi,'_')+'.chordatlas';a.click();setTimeout(()=>URL.revokeObjectURL(url),15000);message('Proyecto y '+data.length+' tomas descargados en tu computadora.')}catch(e){message('No se pudo guardar: '+e.message)}finally{busy=false}}
+ async function openPortable(file){if(!file)return;try{if(recording||recorder)throw Error('Detén la grabación antes de abrir otro proyecto');const doc=JSON.parse(await file.text());if(doc.format!=='chordatlas-project'||!doc.song||!Array.isArray(doc.audio)||!Array.isArray(doc.tracks))throw Error('El archivo no es un proyecto Chord Atlas con audio');if(!confirm('Abrir '+(doc.title||'proyecto')+' como un proyecto nuevo en este navegador?'))return;const target=window.ChordAtlasProjects?.createImported?.(doc.song);if(!target)throw Error('No se pudo crear el proyecto');await setProject(target);tracks=doc.tracks;armed=doc.armed;persist();for(const t of doc.audio){const binary=atob(t.data),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);const {data,mime,...meta}=t;const take={...meta,key:target+':'+Date.now()+'-'+Math.random().toString(36).slice(2,8),project:target,trackId:meta.trackId||'audio1',blob:new Blob([bytes],{type:mime||'audio/webm'})};await put(take)}await setProject(target);V6UI.open('mic');message('Proyecto importado desde el archivo con '+doc.audio.length+' tomas.')}catch(e){message('No se pudo abrir: '+e.message)}}
+ return{setProject,render,record,onTransportStop,schedule,savePortable,openPortable}
 })();
 window.ChordAtlasMicTrack=MicTrack;
+
 
 /* V18: biblioteca independiente por proyecto; motor V17.3 conservado. */
 const ProjectHub=(()=>{
