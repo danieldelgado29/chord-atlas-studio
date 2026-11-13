@@ -290,6 +290,12 @@ header>div[style*="flex:1"]{min-width:0!important}
 #rollPane.drumRoll .gridNote{background:#607f94;border-color:#95b8ce;color:white}
 #rollPane.drumRoll .rollFoot{min-height:24px}
 #rollPane.drumRoll .typingKey .noteCaption{font-size:8px;line-height:1.1;max-width:100%;overflow:hidden;white-space:nowrap}
+
+/* V18.5: clic de preescucha en creación de proyectos */
+.ca-tempo-row{display:flex;align-items:stretch;gap:8px;min-width:0}
+.ca-tempo-row input{min-width:0;flex:1;width:100%}
+#ca-preview-click{flex:0 0 auto;white-space:nowrap;min-width:76px;background:#2b4356;color:#dce9f2;border:1px solid #517087;border-radius:4px}
+#ca-preview-click[aria-pressed="true"]{background:#365e51;border-color:#64a28f}
 </style><style>
 /* CHORD ATLAS V18 — launchpad de proyectos; no cambia geometría DAW V17.3 */
 #ca-home{position:fixed;inset:0;z-index:5000;background:#141c25;color:#d9e7f0;display:flex;align-items:center;justify-content:center;overflow:auto;padding:28px;font-family:inherit}
@@ -342,7 +348,7 @@ header>div[style*="flex:1"]{min-width:0!important}
     <label for="ca-artist">Artista / compositor (opcional)</label><input id="ca-artist" maxlength="100" autocomplete="off" />
     <div class="ca-new-grid">
       <div><label for="ca-key">Tonalidad</label><select id="ca-key"><option value="Sin tonalidad">Sin tonalidad</option><option>C mayor</option><option>Db mayor</option><option>D mayor</option><option>Eb mayor</option><option>E mayor</option><option>F mayor</option><option>Gb mayor</option><option>G mayor</option><option>Ab mayor</option><option>A mayor</option><option>Bb mayor</option><option>B mayor</option><option>A menor</option><option>Bb menor</option><option>B menor</option><option>C menor</option><option>C# menor</option><option>D menor</option><option>Eb menor</option><option>E menor</option><option>F menor</option><option>F# menor</option><option>G menor</option><option>G# menor</option></select></div>
-      <div><label for="ca-bpm">Tempo (BPM)</label><input type="number" id="ca-bpm" min="20" max="300" value="96" required /></div>
+      <div><label for="ca-bpm">Tempo (BPM)</label><div class="ca-tempo-row"><input type="number" id="ca-bpm" min="20" max="300" value="96" required /><button type="button" id="ca-preview-click" aria-pressed="false" title="Escuchar metrónomo mientras ajustas el tempo">▶ Click</button></div></div>
       <div><label for="ca-meter">Métrica</label><select id="ca-meter"><option>4/4</option><option>3/4</option><option>2/4</option><option>6/8</option><option>5/4</option><option>7/8</option><option>12/8</option></select></div>
       <div><label for="ca-bars">Compases iniciales</label><input type="number" id="ca-bars" min="1" max="128" value="8" required /></div>
     </div>
@@ -1209,6 +1215,19 @@ window.ChordAtlasAudioSampler=AudioSampler;
 $('grid').addEventListener('change',()=>{const value=Number($('grid').value);if(value>0){const opts=[960,480,240,120,320,160,1];if(opts.includes(value))V6UI.setQuant?.(value)}render()});window.ChordAtlasChordEngine=ChordEngine;window.ChordAtlasRuler=RulerEngine;RulerEngine.bind();render();TransportEngine.clearUI();
 /* V18: biblioteca independiente por proyecto; motor V17.3 conservado. */
 const ProjectHub=(()=>{
+ // Click de preescucha independiente: no altera el transporte ni el proyecto abierto.
+ const clickPreview=(()=>{
+  let ctx=null,timer=null,next=0,beat=0,playing=false;
+  const bpm=()=>Math.max(20,Math.min(300,Number($('ca-bpm').value)||96));
+  function stop(){playing=false;if(timer!==null){clearInterval(timer);timer=null}const btn=$('ca-preview-click');if(btn){btn.textContent='▶ Click';btn.setAttribute('aria-pressed','false')}}
+  function tick(){if(!playing||!ctx)return;const tempo=bpm();const meter=String($('ca-meter').value||'4/4').split('/').map(Number);const beats=Math.max(1,meter[0]||4);const den=meter[1]||4;const interval=60/tempo*4/den;
+   if(next<ctx.currentTime-.15){next=ctx.currentTime+.03;beat=0}
+   while(next<ctx.currentTime+.09){const o=ctx.createOscillator(),g=ctx.createGain();const t=Math.max(next,ctx.currentTime+.003);o.type='sine';o.frequency.value=beat===0?1250:880;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(beat===0?.16:.10,t+.003);g.gain.exponentialRampToValueAtTime(.0001,t+.055);o.connect(g).connect(ctx.destination);o.start(t);o.stop(t+.062);next+=interval;beat=(beat+1)%beats;}
+  }
+  async function toggle(){if(playing){stop();return}try{ctx=ctx||new(window.AudioContext||window.webkitAudioContext)();await ctx.resume();playing=true;next=ctx.currentTime+.03;beat=0;const btn=$('ca-preview-click');btn.textContent='■ Click';btn.setAttribute('aria-pressed','true');timer=setInterval(tick,25);tick()}catch(e){stop();console.warn('Preescucha de metrónomo',e)}}
+  function tempoChanged(){if(playing&&ctx){next=ctx.currentTime+.03;beat=0}}
+  return{stop,toggle,tempoChanged};
+ })();
  const INDEX='ca_v18_project_index',PREFIX='ca_v18_project_';
  let list=[],active=null,mode='song';
  const byId=id=>list.find(x=>x.id===id);
@@ -1217,22 +1236,22 @@ const ProjectHub=(()=>{
  const saveRecord=(id,doc)=>{localStorage.setItem(PREFIX+id,JSON.stringify(doc))};
  function sync(){if(!active)return;const m=byId(active);if(!m)return;saveRecord(active,state);m.updated=Date.now();m.title=state.projectTitle||m.title;m.artist=state.projectArtist||m.artist;storeIndex()}
  function restore(id){const obj=safeLoad(PREFIX+id);if(!validate(obj))return false; if(running)TransportEngine.stop(false);state=obj;state.bars.forEach(b=>{if(!Array.isArray(b.drums))b.drums=[]});selectedBar=0;selectedChord=state.bars[0]?.chords[0]?.id||null;history=[];future=[];active=id;storeIndex();localStorage.setItem(KEY,JSON.stringify(state));render();return true}
- function openProject(id){sync();if(!restore(id)){alert('No se pudo abrir el proyecto. Comprueba los datos guardados.');return} $('ca-home').hidden=true;V6UI.open(state.projectMode==='melody'?'melody':'pool');toast('Proyecto: '+(state.projectTitle||'Sin título'))}
+ function openProject(id){clickPreview.stop();sync();if(!restore(id)){alert('No se pudo abrir el proyecto. Comprueba los datos guardados.');return} $('ca-home').hidden=true;V6UI.open(state.projectMode==='melody'?'melody':'pool');toast('Proyecto: '+(state.projectTitle||'Sin título'))}
  function escapeHTML(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
- function home(){sync();drawList();$('ca-home').hidden=false;$('ca-new-panel').hidden=true}
+ function home(){clickPreview.stop();sync();drawList();$('ca-home').hidden=false;$('ca-new-panel').hidden=true}
  function drawList(){const area=$('ca-project-list');area.replaceChildren();const rows=[...list].sort((a,b)=>b.updated-a.updated);$('ca-project-count').textContent=rows.length+' proyecto(s)';if(!rows.length){area.innerHTML='<div class="ca-home-empty">Todavía no hay proyectos guardados.</div>';return}
   rows.forEach(m=>{const row=document.createElement('div');row.className='ca-project';const btn=document.createElement('button');btn.type='button';btn.className='ca-project-main';btn.innerHTML='<strong>'+escapeHTML(m.title||'Sin título')+'</strong><span>'+escapeHTML(m.artist||'')+(m.artist?' · ':'')+escapeHTML(m.mode==='melody'?'Melodía':m.mode==='harmony'?'Armonía':'Canción')+' · '+new Date(m.updated).toLocaleDateString()+'</span>';btn.onclick=()=>openProject(m.id);const duplicate=document.createElement('button');duplicate.className='ca-home-btn';duplicate.textContent='Duplicar';duplicate.onclick=()=>{sync();const doc=safeLoad(PREFIX+m.id);if(!validate(doc)){alert('No se pudo leer el proyecto.');return}const id=getId();const title=(m.title||'Sin título')+' copia';doc.projectTitle=title;try{saveRecord(id,doc);list.push({...m,id,title,updated:Date.now()});storeIndex();drawList()}catch(e){alert('No se pudo duplicar: '+e.message)}};const del=document.createElement('button');del.className='ca-home-btn ca-home-btn-danger';del.textContent='Eliminar';del.onclick=()=>{if(!confirm('¿Eliminar «'+m.title+'» de este navegador? Esta acción no se puede deshacer.'))return;if(active===m.id){active=null}list=list.filter(x=>x.id!==m.id);localStorage.removeItem(PREFIX+m.id);storeIndex();drawList()};row.append(btn,duplicate,del);area.appendChild(row)})}
- function begin(type){mode=type;$('ca-title').value='';$('ca-artist').value='';$('ca-key').value=type==='melody'?'Sin tonalidad':'C mayor';$('ca-bpm').value='96';$('ca-meter').value='4/4';$('ca-bars').value='8';$('ca-new-heading').textContent=type==='harmony'?'Nueva exploración armónica':type==='melody'?'Nuevo proyecto de melodía':'Nueva canción';$('ca-new-panel').hidden=false;$('ca-title').focus()}
+ function begin(type){clickPreview.stop();mode=type;$('ca-title').value='';$('ca-artist').value='';$('ca-key').value=type==='melody'?'Sin tonalidad':'C mayor';$('ca-bpm').value='96';$('ca-meter').value='4/4';$('ca-bars').value='8';$('ca-new-heading').textContent=type==='harmony'?'Nueva exploración armónica':type==='melody'?'Nuevo proyecto de melodía':'Nueva canción';$('ca-new-panel').hidden=false;$('ca-title').focus()}
  function create(ev){ev.preventDefault();const bpm=Number($('ca-bpm').value),count=Number($('ca-bars').value);const meter=$('ca-meter').value.split('/').map(Number);if(!Number.isInteger(bpm)||bpm<20||bpm>300||!Number.isInteger(count)||count<1||count>128)return;
   const key=$('ca-key').value,title=$('ca-title').value.trim()||'Sin título',artist=$('ca-artist').value.trim();
-  sync();if(running)TransportEngine.stop(false);
+  clickPreview.stop();sync();if(running)TransportEngine.stop(false);
   const bars=Array.from({length:count},()=>makeBar(meter[0],meter[1]));bars[0].sectionStart=true;bars[0].sectionName=mode==='harmony'?'Exploración':'Intro';
   const fresh={bpm,key,bars,alternatives:[],altIndex:0,projectTitle:title,projectArtist:artist,projectMode:mode};const id=getId();try{saveRecord(id,fresh);list.push({id,title,artist,mode,updated:Date.now()});active=id;storeIndex();state=fresh;selectedBar=0;selectedChord=null;history=[];future=[];localStorage.setItem(KEY,JSON.stringify(state));render();$('ca-new-panel').hidden=true;$('ca-home').hidden=true;V6UI.open(mode==='melody'?'melody':'pool');toast('Proyecto creado: '+title)}catch(e){alert('No se pudo crear el proyecto: '+e.message)}}
  function init(){const data=safeLoad(INDEX);if(data&&Array.isArray(data.list)){list=data.list.filter(x=>x&&typeof x.id==='string');active=byId(data.active)?.id||null}
   if(!list.length){const id=getId();state.projectTitle=state.projectTitle||'Proyecto recuperado';state.projectMode=state.projectMode||'song';saveRecord(id,state);list=[{id,title:state.projectTitle,artist:state.projectArtist||'',mode:state.projectMode,updated:Date.now()}];active=id;storeIndex()}
   else if(active){const doc=safeLoad(PREFIX+active);if(validate(doc)){state=doc;state.bars.forEach(b=>{if(!Array.isArray(b.drums))b.drums=[]})}}
   selectedBar=0;selectedChord=state.bars[0]?.chords[0]?.id||null;render();
-  document.querySelectorAll('[data-ca-start]').forEach(el=>el.onclick=()=>begin(el.dataset.caStart));$('ca-new-form').onsubmit=create;$('ca-cancel').onclick=()=>$('ca-new-panel').hidden=true;$('ca-go-home').onclick=home;
+  document.querySelectorAll('[data-ca-start]').forEach(el=>el.onclick=()=>begin(el.dataset.caStart));$('ca-new-form').onsubmit=create;$('ca-cancel').onclick=()=>{clickPreview.stop();$('ca-new-panel').hidden=true};$('ca-preview-click').onclick=()=>clickPreview.toggle();$('ca-bpm').addEventListener('input',clickPreview.tempoChanged);$('ca-meter').addEventListener('change',clickPreview.tempoChanged);$('ca-go-home').onclick=home;
   document.addEventListener('keydown',e=>{if(!$('ca-home').hidden){if(e.code==='Space'&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){e.preventDefault();e.stopImmediatePropagation()}}},{capture:true});
   home();
  }
