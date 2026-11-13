@@ -1421,11 +1421,22 @@ const MicTrack=(()=>{
    const width=Math.max(1,Math.ceil(region.clientWidth)),height=Math.max(40,region.clientHeight-2),dpr=Math.min(2,window.devicePixelRatio||1);
    const from=Math.max(0,Math.round((take.offsetSec||0)*buffer.sampleRate));
    const count=Math.max(1,Math.min(buffer.length-from,Math.round((take.lengthSec||take.seconds||1)*buffer.sampleRate)));
-   const gain=Math.min(10,.88/Math.max(.008,env.peak)),samples=buffer.getChannelData(0);
-   region.querySelectorAll('canvas').forEach(c=>c.remove());
-   for(let tile=0;tile<width;tile+=768){
+   const gain=Math.min(30,.88/Math.max(.005,env.peak)),samples=buffer.getChannelData(0);
+   // Pinta solo los píxeles cercanos a la pantalla. No recalcular miles de
+   // píxeles invisibles cada vez que se aumenta el zoom o se desplaza la regla.
+   const viewport=$('micArrangeScroll'),regionX=region.offsetLeft;
+   const visibleFrom=Math.max(0,(viewport?.scrollLeft||0)-regionX-768);
+   const visibleTo=Math.min(width,(viewport?.scrollLeft||0)+(viewport?.clientWidth||900)-regionX+768);
+   const scope=[width,height,from,count].join(':');
+   if(region.dataset.waveScope!==scope){region.querySelectorAll('canvas.micWaveTile').forEach(c=>c.remove());region.dataset.waveScope=scope}
+   if(visibleTo<=visibleFrom)return;
+   const firstTile=Math.max(0,Math.floor(visibleFrom/768)*768);
+   const lastTile=Math.min(width,visibleTo);
+   region.querySelectorAll('canvas.micWaveTile').forEach(c=>{const at=Number(c.dataset.tile);if(at<firstTile-768||at>lastTile+768)c.remove()});
+   for(let tile=firstTile;tile<lastTile;tile+=768){
     if(!region.isConnected)return;
-    const tileW=Math.min(768,width-tile),canvas=document.createElement('canvas');
+    if(region.querySelector('canvas[data-tile="'+tile+'"]'))continue;
+    const tileW=Math.min(768,width-tile),canvas=document.createElement('canvas');canvas.dataset.tile=String(tile);
     canvas.className='micWaveTile';canvas.style.left=tile+'px';canvas.style.width=tileW+'px';canvas.style.height=height+'px';canvas.width=Math.max(1,Math.round(tileW*dpr));canvas.height=Math.round(height*dpr);
     region.insertBefore(canvas,region.firstChild);
     const ctx=canvas.getContext('2d'),mid=canvas.height*.5,amp=canvas.height*.46;
