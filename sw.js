@@ -11,6 +11,8 @@ self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET')return;
   const url=new URL(event.request.url);
   if(url.origin!==self.location.origin)return;
+  // La beta aislada no debe sobrescribir el HTML cacheado de la PWA estable.
+  if(url.pathname.includes('/labs/audio-v18-7/'))return;
   if(url.pathname.includes('/assets/audio/')||url.pathname.includes('/assets/drums/')){
     event.respondWith(caches.open(AUDIO).then(async cache=>{
       const cached=await cache.match(event.request);if(cached)return cached;
