@@ -1289,7 +1289,7 @@ $('grid').addEventListener('change',()=>{const value=Number($('grid').value);if(
 const MicTrack=(()=>{
  const DB='chord-atlas-audio-beta-v1',STORE='takes',EQ_FREQ=[60,120,250,500,1000,2000,4000,8000];
  let dbPromise=null,project=null,tracks=[],armed='audio1',takes=[],stream=null,recorder=null,chunks=[],started=0,devices=[],inputId='',notice='Selecciona la M-Track Solo o una entrada de audio.';
- let meterTimer=null,meterContext=null,meterSource=null,sources=new Set(),graphs=new Set(),decoded=new Map(),waveCache=new Map(),busy=false,sessionToken=0,undoStack=[],redoStack=[],selectedRegionKey=null,recordStream=null,captureContext=null,inputChannel=0,monitoring=false,monitorBusy=false,monitorSource=null,monitorGraph=null;
+ let meterTimer=null,meterContext=null,meterSource=null,sources=new Set(),graphs=new Set(),decoded=new Map(),waveCache=new Map(),busy=false,sessionToken=0,undoStack=[],redoStack=[],selectedRegionKey=null,recordStream=null,captureContext=null,inputChannel=0,monitoring=false,monitorBusy=false,monitorSource=null,monitorGraph=null,monitorRequest=0;
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'' :'&#39;'}[c]));
 
  function remember(){undoStack.push({tracks:structuredClone(tracks),armed,takes:takes.map(t=>({...t}))});if(undoStack.length>40)undoStack.shift();redoStack=[]}
@@ -1325,7 +1325,7 @@ const MicTrack=(()=>{
   await devicesList();message('Entrada activa: '+(stream.getAudioTracks()[0]?.label||'Micrófono')+' · canal '+(inputChannel+1)+' mono centrado');return recordStream
  }
  function levelStart(){levelStop();try{meterContext=meterContext||new(window.AudioContext||window.webkitAudioContext)();const analyser=meterContext.createAnalyser();analyser.fftSize=512;meterSource=meterContext.createMediaStreamSource(recordStream||stream);meterSource.connect(analyser);const arr=new Uint8Array(512);meterTimer=setInterval(()=>{analyser.getByteTimeDomainData(arr);let sum=0;for(const v of arr)sum+=((v-128)/128)**2;const el=$('micLevel');if(el)el.value=Math.min(100,Math.round(350*Math.sqrt(sum/arr.length)))},70)}catch(e){console.warn('Medidor',e)}}
- async function record(){if(recorder){TransportEngine.stop(false);return}if(!project){message('Abre un proyecto primero.');return}try{
+ async function record(){if(recorder){TransportEngine.stop(false);return}if(busy)return;if(!project){message('Abre un proyecto primero.');return}try{
   if(running)TransportEngine.stop(false);busy=true;render();await capture();
   const type=['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4'].find(m=>MediaRecorder.isTypeSupported(m));
   const rec=new MediaRecorder(recordStream||stream,type?{mimeType:type}:undefined);recorder=rec;chunks=[];
@@ -1356,17 +1356,18 @@ const MicTrack=(()=>{
  }
  async function toggleMonitoring(){
   if(monitoring){stopMonitoring();message('MON apagado. La pista sigue lista para grabar.');render();return}
-  if(monitorBusy)return;monitorBusy=true;
+  if(monitorBusy)return;monitorBusy=true;const request=++monitorRequest;
   try{
    if(!recordStream?.active)await capture();
+   if(request!==monitorRequest||$('micPane').hidden){endStream();return}
    audio=audio||new(window.AudioContext||window.webkitAudioContext)();
-   await audio.resume();monitoring=true;rewireMonitoring();levelStart();
+   await audio.resume();if(request!==monitorRequest||$('micPane').hidden){endStream();return}monitoring=true;rewireMonitoring();levelStart();
    message('MON activo · escucharás EQ, compresor y reverb. Usa audífonos y pon Direct/USB en USB.');
   }catch(e){monitoring=false;stopMonitoring();message('No se pudo activar MON: '+e.message)}
   finally{monitorBusy=false;render()}
  }
  function stopMonitoring(){
-  monitoring=false;
+  monitorRequest++;monitoring=false;
   try{monitorSource?.disconnect()}catch(_){}
   monitorSource=null;
   if(monitorGraph){graphs.delete(monitorGraph);monitorGraph.disconnect();monitorGraph=null}
@@ -1411,7 +1412,7 @@ const MicTrack=(()=>{
    for(let tile=0;tile<width;tile+=768){
     if(!region.isConnected)return;
     const tileW=Math.min(768,width-tile),canvas=document.createElement('canvas');
-    canvas.className='micWaveTile';canvas.style.left=tile+'px';canvas.style.width=tileW+'px';canvas.width=Math.max(1,Math.round(tileW*dpr));canvas.height=Math.round(height*dpr);
+    canvas.className='micWaveTile';canvas.style.left=tile+'px';canvas.style.width=tileW+'px';canvas.style.height=height+'px';canvas.width=Math.max(1,Math.round(tileW*dpr));canvas.height=Math.round(height*dpr);
     region.insertBefore(canvas,region.firstChild);
     const ctx=canvas.getContext('2d'),mid=canvas.height*.5,amp=canvas.height*.46;
     ctx.fillStyle='#7593a4';ctx.fillRect(0,Math.floor(mid),canvas.width,1);
@@ -1431,7 +1432,7 @@ const MicTrack=(()=>{
  function regionWidth(take){return Math.max(18,tickToPx(take.startTick+(take.lengthSec||take.seconds||1)*state.bpm/60*TPQ)-tickToPx(take.startTick))}
  function render(){const el=$('micPane');if(!el||el.hidden)return;const layout=TimelineEngine.build(state.bars),measureWidths=state.bars.map(()=>tickWidth()),full=Math.max(800,state.bars.length*tickWidth());const selectedTrack=selected();el.innerHTML='<div class="micToolbar"><strong>AUDIO</strong><button id="micAddTrack">＋ Audio</button><button id="micZoomOut" type="button" title="Zoom menos">−</button><span class="micZoomLabel">'+Math.round(RulerEngine.width()/320*100)+'%</span><button id="micZoomIn" type="button" title="Zoom más">＋</button><select id="micDevice"></select><select id="micInputChannel" title="Entrada física para grabar en mono"><option value="0">IN 1 → mono</option><option value="1">IN 2 → mono</option></select><button id="micRefresh">Entradas</button><button id="micMonitor" class="'+(monitoring?'active':'')+'" aria-pressed="'+monitoring+'" title="Escuchar entrada con EQ, compresor y reverb antes de grabar">'+(monitoring?'◉ MON ON':'◯ MON')+'</button><button id="micRec" class="'+(recorder?'active':'')+'">'+(recorder?'■ STOP':'● REC')+'</button><meter id="micLevel" min="0" max="100" value="0"></meter><button id="micUndo" title="Deshacer edición">↶</button><button id="micRedo" title="Rehacer edición">↷</button><button id="micSave">Guardar proyecto en computadora</button><button id="micOpen">Abrir archivo</button><input id="micOpenFile" type="file" accept=".chordatlas,application/json" hidden></div><div id="micStatus" class="micStatus"></div><div class="micDaw"><div class="micTrackList" id="micTrackList"></div><div class="micArrangeScroll" id="micArrangeScroll"><div class="micAudioRuler" id="micAudioRuler" style="width:'+full+'px"></div><div id="micRegions" class="micRegions" style="width:'+full+'px"></div></div></div><div class="micInspector" id="micInspector"></div>';
   $('micMonitor').onclick=toggleMonitoring;$('micZoomOut').onclick=()=>RulerEngine.setZoom(RulerEngine.width()/1.25);$('micZoomIn').onclick=()=>RulerEngine.setZoom(RulerEngine.width()*1.25);
-  $('micUndo').onclick=undo;$('micRedo').onclick=redo;$('micAddTrack').onclick=addTrack;$('micRec').onclick=()=>record();$('micSave').onclick=()=>savePortable();$('micOpen').onclick=()=>$('micOpenFile').click();$('micOpenFile').onchange=e=>{if(e.target.files?.[0])openPortable(e.target.files[0]);e.target.value=''};$('micDevice').onchange=e=>{if(monitoring&&!recorder)stopMonitoring();inputId=e.target.value};$('micInputChannel').value=String(inputChannel);$('micInputChannel').onchange=e=>{if(monitoring&&!recorder)stopMonitoring();inputChannel=Number(e.target.value)===1?1:0};$('micRefresh').onclick=async()=>{try{if(!stream){await capture();endStream()}await devicesList()}catch(e){message(e.message)}};devicesList();message(notice);
+  $('micUndo').onclick=undo;$('micRedo').onclick=redo;$('micAddTrack').onclick=addTrack;$('micRec').onclick=()=>record();$('micSave').onclick=()=>savePortable();$('micOpen').onclick=()=>$('micOpenFile').click();$('micOpenFile').onchange=e=>{if(e.target.files?.[0])openPortable(e.target.files[0]);e.target.value=''};$('micDevice').onchange=e=>{inputId=e.target.value;if(monitoring&&!recorder){stopMonitoring();message('Entrada cambiada. Activa MON nuevamente.')}};$('micInputChannel').value=String(inputChannel);$('micInputChannel').onchange=e=>{inputChannel=Number(e.target.value)===1?1:0;if(monitoring&&!recorder){stopMonitoring();message('Canal cambiado. Activa MON nuevamente.')}};$('micRefresh').onclick=async()=>{try{if(!stream){await capture();endStream()}await devicesList()}catch(e){message(e.message)}};devicesList();message(notice);
   const ruler=$('micAudioRuler'),rows=$('micRegions'),labels=$('micTrackList');state.bars.forEach((bar,i)=>{const mark=document.createElement('div');mark.className='micRulerMark';mark.style.left=(i*tickWidth())+'px';mark.textContent=(i+1)+' · '+bar.num+'/'+bar.den;ruler.appendChild(mark)});
   for(const track of tracks){const id=track.id,lab=document.createElement('div');lab.className='micTrackLabel'+(armed===id?' armed':'');lab.innerHTML='<input class="micTrackName" aria-label="Nombre de pista" value="'+esc(track.name)+'"><button data-action="arm" title="Seleccionar pista">R</button><button data-action="mute" class="'+(track.mute?'active':'')+'">M</button><button data-action="solo" class="'+(track.solo?'active':'')+'">S</button><button data-action="remove" title="Quitar pista">×</button>';lab.querySelector('input').onchange=e=>{changedTrack(id,'name',e.target.value);render()};lab.querySelectorAll('button').forEach(b=>b.onclick=()=>{const a=b.dataset.action;if(a==='arm'){armed=id;persist();rewireMonitoring();render()}else if(a==='mute'||a==='solo'){changedTrack(id,a,!track[a]);render()}else if(a==='remove')removeTrack(id)});labels.appendChild(lab);
     const row=document.createElement('div');row.className='micLane';row.dataset.trackId=id;rows.appendChild(row);for(const t of takes.filter(t=>t.trackId===id)){const reg=document.createElement('div');reg.className='micRegion';reg.style.left=tickToPx(t.startTick)+'px';reg.style.width=regionWidth(t)+'px';reg.title=t.name+' · Option + arrastrar duplica';reg.dataset.key=t.key;reg.innerHTML='<span class="micRegionTitle">'+esc(t.name)+'</span><button class="micDeleteClip" title="Eliminar región" type="button">×</button><i class="micTrim micTrimL"></i><i class="micTrim micTrimR"></i>';reg.querySelector('.micDeleteClip').onclick=async e=>{e.stopPropagation();remember();await remove(t.key);takes=takes.filter(x=>x.key!==t.key);decoded.delete(t.key);render()};row.appendChild(reg);waveform(reg,t);bindRegion(reg,t,track)}
