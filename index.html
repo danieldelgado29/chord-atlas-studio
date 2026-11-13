@@ -1267,24 +1267,28 @@ $('grid').addEventListener('change',()=>{const value=Number($('grid').value);if(
 const MicTrack=(()=>{
  const DB='chord-atlas-audio-v1',STORE='takes';
  let dbPromise=null,project=null,takes=[],stream=null,recorder=null,recording=false,chunks=[],recordStart=0,recordAt=0;
- let devices=[],selectedInput='',sources=new Set(),decoded=new Map(),notice='Selecciona tu interfaz y graba una toma.',levelTimer=null,levelCtx=null,levelAnalyser=null,levelSrc=null,monitorCtx=null;
+ let devices=[],selectedInput='',sources=new Set(),decoded=new Map(),notice='Selecciona tu interfaz y graba una toma.',levelTimer=null,levelCtx=null,levelAnalyser=null,levelSrc=null,monitorCtx=null,recordStream=null,captureContext=null,inputChannel=0;
  function db(){if(dbPromise)return dbPromise;dbPromise=new Promise((resolve,reject)=>{const req=indexedDB.open(DB,1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains(STORE)){const store=req.result.createObjectStore(STORE,{keyPath:'key'});store.createIndex('byProject','project')}};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});return dbPromise}
  async function read(){if(!project){takes=[];return}try{const d=await db();const tx=d.transaction(STORE,'readonly');const req=tx.objectStore(STORE).index('byProject').getAll(project);const found=await new Promise((res,rej)=>{req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error)});takes=found.sort((a,b)=>a.startTick-b.startTick);decoded.clear()}catch(e){notice='No se puede abrir el almacenamiento de audio: '+e.message}render()}
  async function put(take){const d=await db();await new Promise((res,rej)=>{const tx=d.transaction(STORE,'readwrite');tx.objectStore(STORE).put(take);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
  async function remove(key){const d=await db();await new Promise((res,rej)=>{const tx=d.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(key);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
+ // Las tomas estéreo antiguas con audio en un solo lado se reproducen centradas.
+ function centerMono(ctx,buf){if(buf.numberOfChannels!==2)return buf;const l=buf.getChannelData(0),r=buf.getChannelData(1);let eL=0,eR=0;const stride=Math.max(1,Math.floor(buf.length/4096));for(let i=0;i<buf.length;i+=stride){eL+=l[i]*l[i];eR+=r[i]*r[i]}const chosen=eL>eR*8&&eL>1e-8?0:eR>eL*8&&eR>1e-8?1:-1;if(chosen<0)return buf;const m=ctx.createBuffer(1,buf.length,buf.sampleRate);m.copyToChannel(buf.getChannelData(chosen),0);return m}
  function setProject(id){if(recording||recorder)stopRecord();project=id;takes=[];decoded.clear();notice='Audio guardado localmente en este navegador.';read()}
  function status(t){notice=t;const x=$('micStatus');if(x)x.textContent=t}
- function stopTracks(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}if(levelTimer){clearInterval(levelTimer);levelTimer=null}try{levelSrc?.disconnect()}catch(_){}levelSrc=null;levelAnalyser=null}
+ function stopTracks(){recordStream?.getTracks().forEach(t=>t.stop());recordStream=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}if(captureContext){captureContext.close().catch(()=>{});captureContext=null}if(levelTimer){clearInterval(levelTimer);levelTimer=null}try{levelSrc?.disconnect()}catch(_){}levelSrc=null;levelAnalyser=null}
  async function listDevices(){try{devices=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput');renderDevices()}catch(e){status('No se pudo consultar entradas: '+e.message)}}
  function renderDevices(){const select=$('micDevice');if(!select)return;select.innerHTML='<option value="">Entrada predeterminada</option>';devices.forEach((d,i)=>{const opt=document.createElement('option');opt.value=d.deviceId;opt.textContent=d.label||'Micrófono '+(i+1);select.appendChild(opt)});select.value=devices.some(d=>d.deviceId===selectedInput)?selectedInput:''}
  async function capture(){
   if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined')throw Error('Tu navegador no permite grabación de micrófono. Usa Firefox, Chrome o Edge por HTTPS.');
-  const constraints={audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1,...(selectedInput?{deviceId:{ideal:selectedInput}}:{})},video:false};
-  stream=await navigator.mediaDevices.getUserMedia(constraints);await listDevices();
-  const track=stream.getAudioTracks()[0];status('Entrada lista: '+(track.label||'Micrófono'));return stream
+  const constraints={audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:{ideal:2},...(selectedInput?{deviceId:{ideal:selectedInput}}:{})},video:false};
+  stream=await navigator.mediaDevices.getUserMedia(constraints);
+  captureContext=new(window.AudioContext||window.webkitAudioContext)();await captureContext.resume();
+  const source=captureContext.createMediaStreamSource(stream),split=captureContext.createChannelSplitter(2),destination=captureContext.createMediaStreamDestination();source.connect(split);split.connect(destination,inputChannel,0);recordStream=destination.stream;
+  await listDevices();const track=stream.getAudioTracks()[0];status('Entrada lista: '+(track.label||'Micrófono')+' · IN '+(inputChannel+1)+' mono centrado');return recordStream
  }
  function meter(){
-  try{levelCtx=levelCtx||new(window.AudioContext||window.webkitAudioContext)();levelAnalyser=levelCtx.createAnalyser();levelAnalyser.fftSize=512;levelSrc=levelCtx.createMediaStreamSource(stream);levelSrc.connect(levelAnalyser);const arr=new Uint8Array(levelAnalyser.fftSize);levelTimer=setInterval(()=>{if(!levelAnalyser)return;levelAnalyser.getByteTimeDomainData(arr);let rms=0;for(const v of arr)rms+=Math.pow((v-128)/128,2);const meterEl=$('micLevel');if(meterEl)meterEl.value=Math.min(100,Math.round(Math.sqrt(rms/arr.length)*350));},70)}catch(_){}
+  try{levelCtx=levelCtx||new(window.AudioContext||window.webkitAudioContext)();levelAnalyser=levelCtx.createAnalyser();levelAnalyser.fftSize=512;levelSrc=levelCtx.createMediaStreamSource(recordStream||stream);levelSrc.connect(levelAnalyser);const arr=new Uint8Array(levelAnalyser.fftSize);levelTimer=setInterval(()=>{if(!levelAnalyser)return;levelAnalyser.getByteTimeDomainData(arr);let rms=0;for(const v of arr)rms+=Math.pow((v-128)/128,2);const meterEl=$('micLevel');if(meterEl)meterEl.value=Math.min(100,Math.round(Math.sqrt(rms/arr.length)*350));},70)}catch(_){}
  }
  async function record(){
   if(recording){stopRecord();return}
@@ -1292,7 +1296,7 @@ const MicTrack=(()=>{
   try{
    if(running)TransportEngine.stop(false);
    await capture();const mime=['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4'].find(t=>MediaRecorder.isTypeSupported(t));
-   recorder=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);
+   recorder=new MediaRecorder(recordStream||stream,mime?{mimeType:mime}:undefined);
    const current=recorder,owner=project,startedTick=Math.max(0,TransportEngine.cursorTick??TransportEngine.selectedTick());
    chunks=[];recordStart=startedTick;
    current.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data)};
@@ -1312,7 +1316,7 @@ const MicTrack=(()=>{
   // pero se admiten varias regiones; se reproducen en su posición de grabación.
   const owner=project,ctx=audio,from=session.fromTick,to=session.totalTicks;
   for(const take of takes){if(owner!==project||!running)break;
-   try{let buffer=decoded.get(take.key);if(!buffer){buffer=await ctx.decodeAudioData(await take.blob.arrayBuffer());decoded.set(take.key,buffer)}
+   try{let buffer=decoded.get(take.key);if(!buffer){buffer=centerMono(ctx,await ctx.decodeAudioData(await take.blob.arrayBuffer()));decoded.set(take.key,buffer)}
     if(!running||owner!==project||TransportEngine.session!==session)break;
     const clipTicks=buffer.duration/session.secondsPerTick,end=take.startTick+clipTicks;
     if(end<=from||take.startTick>=to)continue;
@@ -1330,8 +1334,8 @@ const MicTrack=(()=>{
   takes.forEach(t=>{const el=document.createElement('div');el.className='micRegion';el.style.left=(100*Math.max(0,t.startTick)/max)+'%';el.style.width=(100*Math.max(0,t.seconds*state.bpm/60*TPQ)/max)+'%';el.title=t.name;el.textContent=t.name;x.appendChild(el)})
  }
  function render(){const el=$('micPane');if(!el||el.hidden)return;
-  el.innerHTML='<div class="micToolbar"><strong>MICRÓFONO · AUDIO</strong><select id="micDevice" aria-label="Entrada de micrófono"></select><button type="button" id="micRefresh">Entradas</button><button type="button" id="micRec" class="'+(recording?'active':'')+'">'+(recording?'■ Detener toma':'● Grabar')+'</button><meter id="micLevel" min="0" max="100" value="0"></meter></div><div id="micStatus" class="micStatus"></div><div id="micClips" class="micClips"></div><div id="micTakes" class="micTakes"></div>';
-  $('micRec').onclick=()=>recording?TransportEngine.stop(false):record();$('micDevice').onchange=e=>{selectedInput=e.target.value};$('micRefresh').onclick=async()=>{try{if(!stream){await capture();stopTracks()}await listDevices()}catch(e){status(e.message)}};
+  el.innerHTML='<div class="micToolbar"><strong>MICRÓFONO · AUDIO</strong><select id="micDevice" aria-label="Interfaz de audio"></select><select id="micInputChannel" aria-label="Entrada física de micrófono"><option value="0">IN 1 → mono</option><option value="1">IN 2 → mono</option></select><button type="button" id="micRefresh">Entradas</button><button type="button" id="micRec" class="'+(recording?'active':'')+'">'+(recording?'■ Detener toma':'● Grabar')+'</button><meter id="micLevel" min="0" max="100" value="0"></meter></div><div id="micStatus" class="micStatus"></div><div id="micClips" class="micClips"></div><div id="micTakes" class="micTakes"></div>';
+  $('micRec').onclick=()=>recording?TransportEngine.stop(false):record();$('micDevice').onchange=e=>{selectedInput=e.target.value};$('micInputChannel').value=String(inputChannel);$('micInputChannel').onchange=e=>{inputChannel=Number(e.target.value)===1?1:0};$('micRefresh').onclick=async()=>{try{if(!stream){await capture();stopTracks()}await listDevices()}catch(e){status(e.message)}};
   renderDevices();status(notice);drawTimeline();const list=$('micTakes');for(const t of takes){const row=document.createElement('div');row.className='micTake';const label=document.createElement('span');label.textContent=t.name+' · '+t.seconds.toFixed(1)+' s';const download=document.createElement('button');download.textContent='Exportar audio';download.onclick=()=>{const url=URL.createObjectURL(t.blob),a=document.createElement('a');a.href=url;a.download='ChordAtlas_'+t.name.replace(/[^a-z0-9_-]/gi,'_')+(t.blob.type.includes('ogg')?'.ogg':t.blob.type.includes('mp4')?'.m4a':'.webm');a.click();setTimeout(()=>URL.revokeObjectURL(url),15000)};const del=document.createElement('button');del.textContent='Eliminar';del.onclick=async()=>{if(!confirm('¿Eliminar esta toma de micrófono?'))return;await remove(t.key);takes=takes.filter(x=>x.key!==t.key);decoded.delete(t.key);render()};row.append(label,download,del);list.appendChild(row)}}
  return{setProject,render,record,onTransportStop,schedule};
 })();
