@@ -302,6 +302,9 @@ header>div[style*="flex:1"]{min-width:0!important}
 /* V18.7 — editor audio multipista tipo DAW */
 #micPane{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:8px;padding:7px}
 #micPane[hidden]{display:none!important}
+.micRegion.micDragging{cursor:grabbing;opacity:.55;box-shadow:0 0 0 2px #a3d9f8;z-index:15!important;pointer-events:none}
+.micRegion.micTrimming{opacity:.75;z-index:15!important}
+.micLane{overflow:visible}
 .micZoomLabel{min-width:42px;text-align:center;font-size:11px;color:#dce9f2}
 .micToolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;flex:0 0 auto}
 .micToolbar select{min-width:100px;max-width:200px;flex:1}
@@ -1402,7 +1405,7 @@ const MicTrack=(()=>{
   $('micUndo').onclick=undo;$('micRedo').onclick=redo;$('micAddTrack').onclick=addTrack;$('micRec').onclick=()=>record();$('micSave').onclick=()=>savePortable();$('micOpen').onclick=()=>$('micOpenFile').click();$('micOpenFile').onchange=e=>{if(e.target.files?.[0])openPortable(e.target.files[0]);e.target.value=''};$('micDevice').onchange=e=>{inputId=e.target.value};$('micInputChannel').value=String(inputChannel);$('micInputChannel').onchange=e=>{inputChannel=Number(e.target.value)===1?1:0};$('micRefresh').onclick=async()=>{try{if(!stream){await capture();endStream()}await devicesList()}catch(e){message(e.message)}};devicesList();message(notice);
   const ruler=$('micAudioRuler'),rows=$('micRegions'),labels=$('micTrackList');state.bars.forEach((bar,i)=>{const mark=document.createElement('div');mark.className='micRulerMark';mark.style.left=(i*tickWidth())+'px';mark.textContent=(i+1)+' · '+bar.num+'/'+bar.den;ruler.appendChild(mark)});
   for(const track of tracks){const id=track.id,lab=document.createElement('div');lab.className='micTrackLabel'+(armed===id?' armed':'');lab.innerHTML='<input class="micTrackName" aria-label="Nombre de pista" value="'+esc(track.name)+'"><button data-action="arm" title="Seleccionar pista">R</button><button data-action="mute" class="'+(track.mute?'active':'')+'">M</button><button data-action="solo" class="'+(track.solo?'active':'')+'">S</button><button data-action="remove" title="Quitar pista">×</button>';lab.querySelector('input').onchange=e=>{changedTrack(id,'name',e.target.value);render()};lab.querySelectorAll('button').forEach(b=>b.onclick=()=>{const a=b.dataset.action;if(a==='arm'){armed=id;persist();render()}else if(a==='mute'||a==='solo'){changedTrack(id,a,!track[a]);render()}else if(a==='remove')removeTrack(id)});labels.appendChild(lab);
-    const row=document.createElement('div');row.className='micLane';rows.appendChild(row);for(const t of takes.filter(t=>t.trackId===id)){const reg=document.createElement('div');reg.className='micRegion';reg.style.left=tickToPx(t.startTick)+'px';reg.style.width=regionWidth(t)+'px';reg.title=t.name+' · Option + arrastrar duplica';reg.dataset.key=t.key;reg.innerHTML='<span class="micRegionTitle">'+esc(t.name)+'</span><button class="micDeleteClip" title="Eliminar región" type="button">×</button><i class="micTrim micTrimL"></i><i class="micTrim micTrimR"></i>';reg.querySelector('.micDeleteClip').onclick=async e=>{e.stopPropagation();remember();await remove(t.key);takes=takes.filter(x=>x.key!==t.key);decoded.delete(t.key);render()};row.appendChild(reg);waveform(reg,t);bindRegion(reg,t,track)}
+    const row=document.createElement('div');row.className='micLane';row.dataset.trackId=id;rows.appendChild(row);for(const t of takes.filter(t=>t.trackId===id)){const reg=document.createElement('div');reg.className='micRegion';reg.style.left=tickToPx(t.startTick)+'px';reg.style.width=regionWidth(t)+'px';reg.title=t.name+' · Option + arrastrar duplica';reg.dataset.key=t.key;reg.innerHTML='<span class="micRegionTitle">'+esc(t.name)+'</span><button class="micDeleteClip" title="Eliminar región" type="button">×</button><i class="micTrim micTrimL"></i><i class="micTrim micTrimR"></i>';reg.querySelector('.micDeleteClip').onclick=async e=>{e.stopPropagation();remember();await remove(t.key);takes=takes.filter(x=>x.key!==t.key);decoded.delete(t.key);render()};row.appendChild(reg);waveform(reg,t);bindRegion(reg,t,track)}
   }
   const scroll=$('micArrangeScroll');scroll.scrollLeft=$('bars').scrollLeft;scroll.addEventListener('scroll',()=>{if($('bars').scrollLeft!==scroll.scrollLeft)RulerEngine.syncScroll(scroll);labels.scrollTop=scroll.scrollTop},{passive:true});labels.addEventListener('scroll',()=>{if(scroll.scrollTop!==labels.scrollTop)scroll.scrollTop=labels.scrollTop},{passive:true});
   el.addEventListener('wheel',e=>{if(e.ctrlKey||e.metaKey){e.preventDefault();RulerEngine.setZoom(RulerEngine.width()*Math.exp(-e.deltaY*.008))}},{passive:false});
@@ -1417,12 +1420,68 @@ const MicTrack=(()=>{
  }
  function tickToPx(tick){let rest=tick,x=0;for(const bar of state.bars){const d=dur(bar);if(rest<d){x+=rest/d*tickWidth();break}rest-=d;x+=tickWidth()}return x}
  function pxToTick(px){let rem=Math.max(0,px),sum=0;for(const bar of state.bars){const w=tickWidth(),d=dur(bar);if(rem<w)return Math.round(sum+rem/w*d);rem-=w;sum+=d}return sum}
- function bindRegion(el,take,track){let down=null;el.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.classList.contains('micDeleteClip'))return;selectedRegionKey=take.key;down={x:e.clientX,alt:e.altKey,side:e.target.classList.contains('micTrimL')?'left':e.target.classList.contains('micTrimR')?'right':'move',start:take.startTick,offset:take.offsetSec||0,length:take.lengthSec||take.seconds||1};el.setPointerCapture(e.pointerId)});el.addEventListener('pointerup',async e=>{if(!down)return;const d=down;down=null;const diff=e.clientX-d.x;if(Math.abs(diff)<4)return;remember();const tickDiff=Math.round(pxToTick(Math.abs(diff))*(diff<0?-1:1));const secondsPerTick=60/state.bpm/TPQ;
-   if(d.side==='move'){if(d.alt){const cp={...take,key:project+':'+Date.now()+'-'+Math.random().toString(36).slice(2,7),startTick:Math.max(0,d.start+tickDiff),name:take.name+' copia'};await put(cp);takes.push(cp)}else{take.startTick=Math.max(0,d.start+tickDiff);await put(take)}}
-   else if(d.side==='left'){const ds=Math.max(-d.offset,Math.min(d.length-.08,tickDiff*secondsPerTick));take.offsetSec=d.offset+ds;take.lengthSec=d.length-ds;take.startTick=Math.max(0,d.start+tickDiff);await put(take)}
-   else{take.lengthSec=Math.max(.08,d.length+tickDiff*secondsPerTick);await put(take)}
-   decoded.delete(take.key);render()
-  });el.addEventListener('dblclick',async e=>{e.stopPropagation();const bounds=el.getBoundingClientRect(),part=(e.clientX-bounds.left)/Math.max(1,bounds.width),d=take.lengthSec||take.seconds||1,point=Math.max(.08,Math.min(d-.08,d*part));if(d<=.17)return;remember();const extra={...take,key:project+':'+Date.now()+'-'+Math.random().toString(36).slice(2,7),offsetSec:(take.offsetSec||0)+point,startTick:take.startTick+Math.round(point*state.bpm/60*TPQ),lengthSec:d-point,name:take.name+' B'};take.lengthSec=point;await put(take);await put(extra);takes.push(extra);render()})
+
+ function bindRegion(el,take,track){
+  let drag=null;const secPerTick=()=>60/state.bpm/TPQ;
+  const snap=tick=>{const grid=Math.max(1,Number($('grid')?.value)||120);return Math.round(tick/grid)*grid};
+  const restore=()=>{el.classList.remove('micDragging','micTrimming');el.style.transform='';el.style.opacity='';el.style.zIndex='';};
+  el.addEventListener('pointerdown',e=>{
+   if(e.button!==0||e.target.classList.contains('micDeleteClip'))return;
+   selectedRegionKey=take.key;
+   const side=e.target.classList.contains('micTrimL')?'left':e.target.classList.contains('micTrimR')?'right':'move';
+   drag={id:e.pointerId,x:e.clientX,y:e.clientY,alt:e.altKey,side,start:take.startTick,offset:take.offsetSec||0,length:take.lengthSec||take.seconds||1,changed:false,dx:0,dy:0};
+   el.setPointerCapture(e.pointerId);e.preventDefault();
+  });
+  el.addEventListener('pointermove',e=>{
+   if(!drag||drag.id!==e.pointerId)return;
+   drag.dx=e.clientX-drag.x;drag.dy=e.clientY-drag.y;
+   if(Math.abs(drag.dx)+Math.abs(drag.dy)>3)drag.changed=true;
+   if(!drag.changed)return;
+   el.style.zIndex='15';
+   if(drag.side==='move'){
+    el.classList.add('micDragging');el.style.opacity='.55';
+    const x=Math.max(-tickToPx(drag.start),drag.dx);
+    el.style.transform='translate('+x+'px,'+drag.dy+'px)';
+   }else{
+    el.classList.add('micTrimming');
+    const minWidth=16,oldWidth=regionWidth(take);
+    if(drag.side==='right'){el.style.width=Math.max(minWidth,oldWidth+drag.dx)+'px'}
+    else{const dx=Math.min(oldWidth-minWidth,drag.dx);el.style.transform='translateX('+dx+'px)';el.style.width=Math.max(minWidth,oldWidth-dx)+'px'}
+   }
+  });
+  el.addEventListener('pointercancel',()=>{drag=null;restore();el.style.width=regionWidth(take)+'px'});
+  el.addEventListener('pointerup',async e=>{
+   if(!drag||drag.id!==e.pointerId)return;
+   const d=drag;drag=null;restore();el.style.width=regionWidth(take)+'px';if(!d.changed)return;
+   const deltaPx=Math.abs(d.dx)+Math.abs(d.dy);
+   if(deltaPx<3)return;
+   remember();
+   const rawTick=pxToTick(tickToPx(d.start)+d.dx),placed=Math.max(0,snap(rawTick));
+   if(d.side==='move'){
+    // La región sigue al cursor. Se confirma posición y pista al soltarla.
+    const target=document.elementsFromPoint(e.clientX,e.clientY).find(node=>node.classList?.contains('micLane'));
+    const newTrack=target?.dataset.trackId||take.trackId;
+    if(d.alt){const cp={...take,key:project+':'+Date.now()+'-'+Math.random().toString(36).slice(2,7),startTick:placed,trackId:newTrack,name:take.name+' copia'};await put(cp);takes.push(cp)}
+    else{take.startTick=placed;take.trackId=newTrack;await put(take)}
+   }else{
+    const change=(placed-d.start)*secPerTick();
+    const source=decoded.get(take.key),sourceLimit=source?.duration||take.seconds||d.length;
+    if(d.side==='left'){
+     const actual=Math.max(-d.offset,Math.min(d.length-.08,change));
+     take.offsetSec=d.offset+actual;take.lengthSec=d.length-actual;take.startTick=Math.max(0,d.start+Math.round(actual/secPerTick()))
+    }else{take.lengthSec=Math.max(.08,Math.min(sourceLimit-d.offset,d.length+change))}
+    await put(take)
+   }
+   render()
+  });
+  el.addEventListener('dblclick',async e=>{
+   if(e.target.classList.contains('micDeleteClip'))return;e.stopPropagation();
+   const bounds=el.getBoundingClientRect(),fraction=Math.max(0,Math.min(1,(e.clientX-bounds.left)/Math.max(1,bounds.width)));
+   const len=take.lengthSec||take.seconds||1,cut=Math.max(.08,Math.min(len-.08,len*fraction));if(len<=.17)return;
+   remember();
+   const extra={...take,key:project+':'+Date.now()+'-'+Math.random().toString(36).slice(2,7),offsetSec:(take.offsetSec||0)+cut,startTick:take.startTick+Math.round(cut/secPerTick()),lengthSec:len-cut,name:take.name+' B'};
+   take.lengthSec=cut;await put(take);await put(extra);takes.push(extra);render()
+  })
  }
  async function savePortable(){if(!project||busy)return;try{busy=true;message('Preparando archivo con audio…');const all=await query();const data=[];for(const take of all){const ab=await take.blob.arrayBuffer(),bytes=new Uint8Array(ab);let str='';for(let p=0;p<bytes.length;p+=32768)str+=String.fromCharCode(...bytes.subarray(p,p+32768));const {blob,...meta}=take;data.push({...meta,mime:blob.type,data:btoa(str)})}
   const doc={format:'chordatlas-project',version:1,title:state.projectTitle||'Proyecto',song:state,tracks,armed,audio:data,exported:new Date().toISOString()};const blob=new Blob([JSON.stringify(doc)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(state.projectTitle||'Chord Atlas').replace(/[^a-z0-9 _-]/gi,'_')+'.chordatlas';a.click();setTimeout(()=>URL.revokeObjectURL(url),15000);message('Proyecto y '+data.length+' tomas descargados en tu computadora.')}catch(e){message('No se pudo guardar: '+e.message)}finally{busy=false}}
