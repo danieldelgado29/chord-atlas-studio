@@ -302,6 +302,7 @@ header>div[style*="flex:1"]{min-width:0!important}
 /* V18.7 — editor audio multipista tipo DAW */
 #micPane{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:8px;padding:7px}
 #micPane[hidden]{display:none!important}
+.micZoomLabel{min-width:42px;text-align:center;font-size:11px;color:#dce9f2}
 .micToolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;flex:0 0 auto}
 .micToolbar select{min-width:100px;max-width:200px;flex:1}
 .micToolbar meter{width:65px}
@@ -318,8 +319,8 @@ header>div[style*="flex:1"]{min-width:0!important}
 .micRegions{min-height:86px}
 .micLane{height:86px;position:relative;border-bottom:1px solid #465867;background:repeating-linear-gradient(90deg,transparent,transparent 79px,#415260 80px)}
 .micRegion{position:absolute;top:9px;height:66px;min-width:10px;border:1px solid #7aa5b9;background:#345768;cursor:grab;overflow:hidden}
-.micRegion canvas{display:block;width:100%;height:100%}
-.micRegion span{position:absolute;top:2px;left:5px;font-size:10px;color:#e7f2fa;text-shadow:0 1px 2px #000}
+.micRegion canvas.micWaveTile{position:absolute;top:0;bottom:0;height:100%;pointer-events:none}
+.micRegion .micRegionTitle{position:absolute;top:2px;left:5px;z-index:2;font-size:10px;color:#e7f2fa;text-shadow:0 1px 2px #000;pointer-events:none}
 .micDeleteClip{position:absolute;top:0;right:0;z-index:3;padding:0 5px;font-size:11px;background:#253847aa;border:0;color:#dde9f3}.micDeleteClip:hover{background:#9b4554}
 .micTrim{position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize}
 .micTrimL{left:0}.micTrimR{right:0}
@@ -662,8 +663,8 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')metroSettings.hidden
 /* V11 · Ruler and loop region engine — non-destructive, same timeline data. */
 const RulerEngine={barWidth:320,compactWidth:172,rollWidth:960,cycle:null,point:null,dragging:false,manualPosition:null,hoverTick:null,touches:new Map(),pinchDist:null,pinchBase:null,
 scrollSync:false,
- scrollToPixel(px){const bars=$('bars'),ruler=$('songRuler'),roll=$('rollPane')?.querySelector('.rollLayout');const clamped=Math.max(0,Math.min(px,Math.max(0,bars.scrollWidth-bars.clientWidth)));if(this.scrollSync)return;this.scrollSync=true;bars.scrollLeft=clamped;ruler.scrollLeft=clamped;if(roll)roll.scrollLeft=clamped;this.scrollSync=false},
- syncScroll(source){if(this.scrollSync)return;const bar=$('bars'),ruler=$('songRuler'),roll=$('rollPane')?.querySelector('.rollLayout');const x=source.scrollLeft;this.scrollSync=true;if(source!==bar)bar.scrollLeft=x;if(source!==ruler)ruler.scrollLeft=x;if(roll&&source!==roll)roll.scrollLeft=x;this.scrollSync=false},
+ scrollToPixel(px){const bars=$('bars'),ruler=$('songRuler'),roll=$('rollPane')?.querySelector('.rollLayout'),mic=$('micArrangeScroll');const clamped=Math.max(0,Math.min(px,Math.max(0,bars.scrollWidth-bars.clientWidth)));if(this.scrollSync)return;this.scrollSync=true;bars.scrollLeft=clamped;ruler.scrollLeft=clamped;if(roll)roll.scrollLeft=clamped;if(mic)mic.scrollLeft=clamped;this.scrollSync=false},
+ syncScroll(source){if(this.scrollSync)return;const bar=$('bars'),ruler=$('songRuler'),roll=$('rollPane')?.querySelector('.rollLayout'),mic=$('micArrangeScroll');const x=source.scrollLeft;this.scrollSync=true;if(source!==bar)bar.scrollLeft=x;if(source!==ruler)ruler.scrollLeft=x;if(roll&&source!==roll)roll.scrollLeft=x;if(mic&&source!==mic)mic.scrollLeft=x;this.scrollSync=false},
  width(){return this.barWidth},
  setZoom(v){const next=Math.max(95,Math.min(1200,Number(v)));this.barWidth=next;this.compactWidth=next;this.rollWidth=Math.round(next*state.bars.length);document.querySelector('.main').style.setProperty('--bar-width',this.barWidth+'px');document.querySelector('.main').style.setProperty('--bar-width-mini',this.compactWidth+'px');const grid=$('rollGrid');if(grid){grid.style.width=this.rollWidth+'px';grid.style.minWidth=this.rollWidth+'px'}this.draw();if(window.ChordAtlasV6UI)window.ChordAtlasV6UI.zoomUpdated?.()},
  layout(){return TimelineEngine.build(state.bars)},
@@ -1134,7 +1135,7 @@ const V6UI=(()=>{
   if('awsedftgyhujk'.includes(key)&&key.length===1){e.preventDefault();typeKey(key)}
  }
  $('toggleStructure').onclick=$('hideStructure').onclick=()=>{const w=document.querySelector('.workspace');w.classList.toggle('structure-hidden');$('toggleStructure').classList.toggle('active',!w.classList.contains('structure-hidden'))};$('openPool').onclick=()=>open('pool');$('dockCollapse').onclick=close;$('sideHarmony').onclick=()=>open('pool');$('sideMelody').onclick=()=>open('melody');$('sideBass').onclick=()=>open('bass');$('sideDrums').onclick=()=>open('drums');$('sideMic').onclick=()=>open('mic');$('openNoteEditor').onclick=()=>open($('noteTrack').value);window.addEventListener('keydown',onKey);window.addEventListener('keyup',onKey);
- return {open,close,render,updateHarmonyContext(){const hint=$('rollPane')?.querySelector('.chordHint');if(hint)hint.textContent='♫ '+(HarmonyEngine.lookup(TimelineEngine.build(state.bars),TransportEngine.cursorTick??0)?.events.map(c=>c.symbol).join(' + ')||'Sin acorde')},zoomUpdated(){if(pane==='roll'&&!$('editorDock').classList.contains('hidden')){const x=$('bars').scrollLeft;renderRoll();const roll=$('rollPane')?.querySelector('.rollLayout');if(roll)roll.scrollLeft=x}},setQuant(value){rollQuant=value;if(pane==='roll')renderRoll()},finishHeldNotes,updateCursor(info){const grid=$('rollGrid');if(!grid||pane!=='roll'||$('editorDock').classList.contains('hidden'))return;let el=grid.querySelector('.rollCursor');if(!el){el=document.createElement('div');el.className='rollCursor';grid.appendChild(el)}el.style.left=(info.barIndex+info.localTick/info.where.duration)*RulerEngine.barWidth+'px'},debug:()=>({pane,poolFamily,rollTrack,rollStep,typingOn})};
+ return {open,close,render,updateHarmonyContext(){const hint=$('rollPane')?.querySelector('.chordHint');if(hint)hint.textContent='♫ '+(HarmonyEngine.lookup(TimelineEngine.build(state.bars),TransportEngine.cursorTick??0)?.events.map(c=>c.symbol).join(' + ')||'Sin acorde')},zoomUpdated(){if($('editorDock').classList.contains('hidden'))return;if(pane==='mic'){MicTrack.zoomUpdated();return}if(pane==='roll'){const x=$('bars').scrollLeft;renderRoll();const roll=$('rollPane')?.querySelector('.rollLayout');if(roll)roll.scrollLeft=x}},setQuant(value){rollQuant=value;if(pane==='roll')renderRoll()},finishHeldNotes,updateCursor(info){const grid=$('rollGrid');if(!grid||pane!=='roll'||$('editorDock').classList.contains('hidden'))return;let el=grid.querySelector('.rollCursor');if(!el){el=document.createElement('div');el.className='rollCursor';grid.appendChild(el)}el.style.left=(info.barIndex+info.localTick/info.where.duration)*RulerEngine.barWidth+'px'},debug:()=>({pane,poolFamily,rollTrack,rollStep,typingOn})};
 })();window.ChordAtlasV6UI=V6UI;window.ChordAtlasStability={version:'17.2',keyboard:()=>!!document.querySelector('.typingPiano'),midiRows:()=>document.querySelectorAll('.pianoKey').length};
 
 
@@ -1353,17 +1354,58 @@ const MicTrack=(()=>{
    }catch(e){console.warn('Región de audio no reproducida',e)}
   }
  }
+ function zoomUpdated(){if(!$('micPane').hidden){render()}}
  function changedTrack(id,key,value){const t=tracks.find(t=>t.id===id);if(!t)return;t[key]=value;persist();for(const g of graphs)if(g.trackId===id)updateFxGraph(g,t)}
- function tickWidth(){return Math.max(1,parseFloat(getComputedStyle(document.querySelector('.main')).getPropertyValue('--bar-width'))||320)}
- async function waveform(canvas,take){try{let buffer=decoded.get(take.key);if(!buffer){const ctx=audio||new(window.AudioContext||window.webkitAudioContext)();buffer=centerMono(ctx,await ctx.decodeAudioData(await take.blob.arrayBuffer()));decoded.set(take.key,buffer)}if(!canvas.isConnected)return;const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height,channel=buffer.getChannelData(0),offset=Math.round((take.offsetSec||0)*buffer.sampleRate),n=Math.round((take.lengthSec||take.seconds||1)*buffer.sampleRate);ctx.clearRect(0,0,w,h);ctx.strokeStyle='#a9d7e9';ctx.beginPath();for(let x=0;x<w;x++){const a=Math.min(channel.length,offset+Math.floor(x*n/w)),b=Math.min(channel.length,offset+Math.floor((x+1)*n/w)),stride=Math.max(1,Math.floor((b-a)/12));let lo=1,hi=-1;for(let j=a;j<b;j+=stride){lo=Math.min(lo,channel[j]);hi=Math.max(hi,channel[j])}if(hi<lo){lo=0;hi=0}ctx.moveTo(x,(1-hi)*h/2);ctx.lineTo(x,(1-lo)*h/2)}ctx.stroke()}catch(e){console.warn('Waveform',e)}}
- function regionWidth(take){return Math.max(18,(take.lengthSec||take.seconds||1)*state.bpm/60*TPQ/Math.max(1,dur(state.bars[0]))*tickWidth())}
- function render(){const el=$('micPane');if(!el||el.hidden)return;const layout=TimelineEngine.build(state.bars),measureWidths=state.bars.map(()=>tickWidth()),full=Math.max(800,state.bars.length*tickWidth());const selectedTrack=selected();el.innerHTML='<div class="micToolbar"><strong>AUDIO</strong><button id="micAddTrack">＋ Audio</button><select id="micDevice"></select><select id="micInputChannel" title="Entrada física para grabar en mono"><option value="0">IN 1 → mono</option><option value="1">IN 2 → mono</option></select><button id="micRefresh">Entradas</button><button id="micRec" class="'+(recorder?'active':'')+'">'+(recorder?'■ STOP':'● REC')+'</button><meter id="micLevel" min="0" max="100" value="0"></meter><button id="micUndo" title="Deshacer edición">↶</button><button id="micRedo" title="Rehacer edición">↷</button><button id="micSave">Guardar proyecto en computadora</button><button id="micOpen">Abrir archivo</button><input id="micOpenFile" type="file" accept=".chordatlas,application/json" hidden></div><div id="micStatus" class="micStatus"></div><div class="micDaw"><div class="micTrackList" id="micTrackList"></div><div class="micArrangeScroll" id="micArrangeScroll"><div class="micAudioRuler" id="micAudioRuler" style="width:'+full+'px"></div><div id="micRegions" class="micRegions" style="width:'+full+'px"></div></div></div><div class="micInspector" id="micInspector"></div>';
+
+ function tickWidth(){return RulerEngine.width()}
+ async function waveform(region,take){
+  // Visualización de picos reales, a escala de píxel; ningún efecto cambia el audio.
+  try{
+   let buffer=decoded.get(take.key);
+   if(!buffer){const ctx=audio||new(window.AudioContext||window.webkitAudioContext)();buffer=centerMono(ctx,await ctx.decodeAudioData(await take.blob.arrayBuffer()));decoded.set(take.key,buffer)}
+   if(!region.isConnected)return;
+   let env=waveCache.get(take.key);
+   if(!env||env.buffer!==buffer){
+    const hop=128,n=Math.ceil(buffer.length/hop),lo=new Float32Array(n),hi=new Float32Array(n);
+    const samples=buffer.getChannelData(0);let peak=0;
+    for(let i=0;i<n;i++){let a=1,b=-1;for(let j=i*hop;j<Math.min(samples.length,(i+1)*hop);j++){a=Math.min(a,samples[j]);b=Math.max(b,samples[j])}lo[i]=a;hi[i]=b;peak=Math.max(peak,Math.abs(a),Math.abs(b))}
+    env={buffer,lo,hi,hop,peak};waveCache.set(take.key,env)
+   }
+   const width=Math.max(1,Math.ceil(region.clientWidth)),height=Math.max(40,region.clientHeight-2),dpr=Math.min(2,window.devicePixelRatio||1);
+   const from=Math.max(0,Math.round((take.offsetSec||0)*buffer.sampleRate));
+   const count=Math.max(1,Math.min(buffer.length-from,Math.round((take.lengthSec||take.seconds||1)*buffer.sampleRate)));
+   const gain=Math.min(10,.88/Math.max(.008,env.peak)),samples=buffer.getChannelData(0);
+   region.querySelectorAll('canvas').forEach(c=>c.remove());
+   for(let tile=0;tile<width;tile+=768){
+    if(!region.isConnected)return;
+    const tileW=Math.min(768,width-tile),canvas=document.createElement('canvas');
+    canvas.className='micWaveTile';canvas.style.left=tile+'px';canvas.style.width=tileW+'px';canvas.width=Math.max(1,Math.round(tileW*dpr));canvas.height=Math.round(height*dpr);
+    region.insertBefore(canvas,region.firstChild);
+    const ctx=canvas.getContext('2d'),mid=canvas.height*.5,amp=canvas.height*.46;
+    ctx.fillStyle='#7593a4';ctx.fillRect(0,Math.floor(mid),canvas.width,1);
+    ctx.fillStyle='#bee7f8';
+    for(let x=0;x<canvas.width;x++){
+     const pos=tile+x/dpr,a=from+Math.floor(pos/width*count),b=Math.min(buffer.length,Math.max(a+1,from+Math.ceil((pos+1/dpr)/width*count)));
+     let min=1,max=-1;
+     if(b-a<=env.hop*3){for(let k=a;k<b;k++){const v=samples[k];min=Math.min(min,v);max=Math.max(max,v)}}
+     else{for(let k=Math.floor(a/env.hop);k<Math.min(env.lo.length,Math.ceil(b/env.hop));k++){min=Math.min(min,env.lo[k]);max=Math.max(max,env.hi[k])}}
+     if(max<min){min=0;max=0}
+     const y1=Math.max(0,Math.min(canvas.height,mid-max*gain*amp)),y2=Math.max(0,Math.min(canvas.height,mid-min*gain*amp));
+     ctx.fillRect(x,Math.floor(y1),1,Math.max(1,Math.ceil(y2-y1)));
+    }
+   }
+  }catch(e){console.warn('Waveform',e)}
+ }
+ function regionWidth(take){return Math.max(18,tickToPx(take.startTick+(take.lengthSec||take.seconds||1)*state.bpm/60*TPQ)-tickToPx(take.startTick))}
+ function render(){const el=$('micPane');if(!el||el.hidden)return;const layout=TimelineEngine.build(state.bars),measureWidths=state.bars.map(()=>tickWidth()),full=Math.max(800,state.bars.length*tickWidth());const selectedTrack=selected();el.innerHTML='<div class="micToolbar"><strong>AUDIO</strong><button id="micAddTrack">＋ Audio</button><button id="micZoomOut" type="button" title="Zoom menos">−</button><span class="micZoomLabel">'+Math.round(RulerEngine.width()/320*100)+'%</span><button id="micZoomIn" type="button" title="Zoom más">＋</button><select id="micDevice"></select><select id="micInputChannel" title="Entrada física para grabar en mono"><option value="0">IN 1 → mono</option><option value="1">IN 2 → mono</option></select><button id="micRefresh">Entradas</button><button id="micRec" class="'+(recorder?'active':'')+'">'+(recorder?'■ STOP':'● REC')+'</button><meter id="micLevel" min="0" max="100" value="0"></meter><button id="micUndo" title="Deshacer edición">↶</button><button id="micRedo" title="Rehacer edición">↷</button><button id="micSave">Guardar proyecto en computadora</button><button id="micOpen">Abrir archivo</button><input id="micOpenFile" type="file" accept=".chordatlas,application/json" hidden></div><div id="micStatus" class="micStatus"></div><div class="micDaw"><div class="micTrackList" id="micTrackList"></div><div class="micArrangeScroll" id="micArrangeScroll"><div class="micAudioRuler" id="micAudioRuler" style="width:'+full+'px"></div><div id="micRegions" class="micRegions" style="width:'+full+'px"></div></div></div><div class="micInspector" id="micInspector"></div>';
+  $('micZoomOut').onclick=()=>RulerEngine.setZoom(RulerEngine.width()/1.25);$('micZoomIn').onclick=()=>RulerEngine.setZoom(RulerEngine.width()*1.25);
   $('micUndo').onclick=undo;$('micRedo').onclick=redo;$('micAddTrack').onclick=addTrack;$('micRec').onclick=()=>record();$('micSave').onclick=()=>savePortable();$('micOpen').onclick=()=>$('micOpenFile').click();$('micOpenFile').onchange=e=>{if(e.target.files?.[0])openPortable(e.target.files[0]);e.target.value=''};$('micDevice').onchange=e=>{inputId=e.target.value};$('micInputChannel').value=String(inputChannel);$('micInputChannel').onchange=e=>{inputChannel=Number(e.target.value)===1?1:0};$('micRefresh').onclick=async()=>{try{if(!stream){await capture();endStream()}await devicesList()}catch(e){message(e.message)}};devicesList();message(notice);
   const ruler=$('micAudioRuler'),rows=$('micRegions'),labels=$('micTrackList');state.bars.forEach((bar,i)=>{const mark=document.createElement('div');mark.className='micRulerMark';mark.style.left=(i*tickWidth())+'px';mark.textContent=(i+1)+' · '+bar.num+'/'+bar.den;ruler.appendChild(mark)});
   for(const track of tracks){const id=track.id,lab=document.createElement('div');lab.className='micTrackLabel'+(armed===id?' armed':'');lab.innerHTML='<input class="micTrackName" aria-label="Nombre de pista" value="'+esc(track.name)+'"><button data-action="arm" title="Seleccionar pista">R</button><button data-action="mute" class="'+(track.mute?'active':'')+'">M</button><button data-action="solo" class="'+(track.solo?'active':'')+'">S</button><button data-action="remove" title="Quitar pista">×</button>';lab.querySelector('input').onchange=e=>{changedTrack(id,'name',e.target.value);render()};lab.querySelectorAll('button').forEach(b=>b.onclick=()=>{const a=b.dataset.action;if(a==='arm'){armed=id;persist();render()}else if(a==='mute'||a==='solo'){changedTrack(id,a,!track[a]);render()}else if(a==='remove')removeTrack(id)});labels.appendChild(lab);
-    const row=document.createElement('div');row.className='micLane';rows.appendChild(row);for(const t of takes.filter(t=>t.trackId===id)){const reg=document.createElement('div');reg.className='micRegion';reg.style.left=tickToPx(t.startTick)+'px';reg.style.width=Math.max(18,tickToPx(t.startTick+(t.lengthSec||t.seconds||1)*state.bpm/60*TPQ)-tickToPx(t.startTick))+'px';reg.title=t.name+' · Option + arrastrar duplica';reg.dataset.key=t.key;reg.innerHTML='<canvas width="400" height="52"></canvas><span>'+esc(t.name)+'</span><button class="micDeleteClip" title="Eliminar región" type="button">×</button><i class="micTrim micTrimL"></i><i class="micTrim micTrimR"></i>';reg.querySelector('.micDeleteClip').onclick=async e=>{e.stopPropagation();remember();await remove(t.key);takes=takes.filter(x=>x.key!==t.key);decoded.delete(t.key);render()};row.appendChild(reg);waveform(reg.querySelector('canvas'),t);bindRegion(reg,t,track)}
+    const row=document.createElement('div');row.className='micLane';rows.appendChild(row);for(const t of takes.filter(t=>t.trackId===id)){const reg=document.createElement('div');reg.className='micRegion';reg.style.left=tickToPx(t.startTick)+'px';reg.style.width=regionWidth(t)+'px';reg.title=t.name+' · Option + arrastrar duplica';reg.dataset.key=t.key;reg.innerHTML='<span class="micRegionTitle">'+esc(t.name)+'</span><button class="micDeleteClip" title="Eliminar región" type="button">×</button><i class="micTrim micTrimL"></i><i class="micTrim micTrimR"></i>';reg.querySelector('.micDeleteClip').onclick=async e=>{e.stopPropagation();remember();await remove(t.key);takes=takes.filter(x=>x.key!==t.key);decoded.delete(t.key);render()};row.appendChild(reg);waveform(reg,t);bindRegion(reg,t,track)}
   }
-  const scroll=$('micArrangeScroll');scroll.scrollLeft=$('bars').scrollLeft;scroll.addEventListener('scroll',()=>{if($('bars').scrollLeft!==scroll.scrollLeft)RulerEngine.scrollToPixel(scroll.scrollLeft);labels.scrollTop=scroll.scrollTop},{passive:true});labels.addEventListener('scroll',()=>{if(scroll.scrollTop!==labels.scrollTop)scroll.scrollTop=labels.scrollTop},{passive:true});
+  const scroll=$('micArrangeScroll');scroll.scrollLeft=$('bars').scrollLeft;scroll.addEventListener('scroll',()=>{if($('bars').scrollLeft!==scroll.scrollLeft)RulerEngine.syncScroll(scroll);labels.scrollTop=scroll.scrollTop},{passive:true});labels.addEventListener('scroll',()=>{if(scroll.scrollTop!==labels.scrollTop)scroll.scrollTop=labels.scrollTop},{passive:true});
+  el.addEventListener('wheel',e=>{if(e.ctrlKey||e.metaKey){e.preventDefault();RulerEngine.setZoom(RulerEngine.width()*Math.exp(-e.deltaY*.008))}},{passive:false});
   if(selectedTrack)drawInspector(selectedTrack)
  }
  function drawInspector(track){const el=$('micInspector');el.replaceChildren();const title=document.createElement('strong');title.textContent='INSPECTOR · '+track.name;el.appendChild(title);
@@ -1385,7 +1427,7 @@ const MicTrack=(()=>{
  async function savePortable(){if(!project||busy)return;try{busy=true;message('Preparando archivo con audio…');const all=await query();const data=[];for(const take of all){const ab=await take.blob.arrayBuffer(),bytes=new Uint8Array(ab);let str='';for(let p=0;p<bytes.length;p+=32768)str+=String.fromCharCode(...bytes.subarray(p,p+32768));const {blob,...meta}=take;data.push({...meta,mime:blob.type,data:btoa(str)})}
   const doc={format:'chordatlas-project',version:1,title:state.projectTitle||'Proyecto',song:state,tracks,armed,audio:data,exported:new Date().toISOString()};const blob=new Blob([JSON.stringify(doc)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(state.projectTitle||'Chord Atlas').replace(/[^a-z0-9 _-]/gi,'_')+'.chordatlas';a.click();setTimeout(()=>URL.revokeObjectURL(url),15000);message('Proyecto y '+data.length+' tomas descargados en tu computadora.')}catch(e){message('No se pudo guardar: '+e.message)}finally{busy=false}}
  async function openPortable(file){if(!file)return;try{if(recorder)throw Error('Detén la grabación antes de abrir otro proyecto');const doc=JSON.parse(await file.text());if(doc.format!=='chordatlas-project'||!doc.song||!Array.isArray(doc.audio)||!Array.isArray(doc.tracks))throw Error('El archivo no es un proyecto Chord Atlas con audio');if(!confirm('Abrir '+(doc.title||'proyecto')+' como un proyecto nuevo en este navegador?'))return;const target=window.ChordAtlasProjects?.createImported?.(doc.song);if(!target)throw Error('No se pudo crear el proyecto');await setProject(target);tracks=doc.tracks;armed=doc.armed;persist();for(const t of doc.audio){const binary=atob(t.data),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);const {data,mime,...meta}=t;const take={...meta,key:target+':'+Date.now()+'-'+Math.random().toString(36).slice(2,8),project:target,trackId:meta.trackId||'audio1',blob:new Blob([bytes],{type:mime||'audio/webm'})};await put(take)}await setProject(target);V6UI.open('mic');message('Proyecto importado desde el archivo con '+doc.audio.length+' tomas.')}catch(e){message('No se pudo abrir: '+e.message)}}
- return{setProject,render,record,onTransportStop,schedule,savePortable,openPortable,undo,redo}
+ return{setProject,render,record,onTransportStop,schedule,savePortable,openPortable,undo,redo,zoomUpdated}
 })();
 window.ChordAtlasMicTrack=MicTrack;
 document.addEventListener('keydown',e=>{if(!e.repeat&&(e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'&&!$('micPane').hidden&&document.activeElement?.tagName!=='INPUT'){e.preventDefault();if(e.shiftKey)MicTrack.redo();else MicTrack.undo()}},true);
